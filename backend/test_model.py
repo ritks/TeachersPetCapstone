@@ -104,7 +104,7 @@ def query_github(token, model, question, retries=3):
                     "temperature": 0.7,
                     "max_tokens": 2000
                 },
-                timeout=30
+                timeout=90
             )
             
             if response.status_code == 200:
@@ -180,6 +180,7 @@ def run_evaluation(input_path, model, provider, delay, output_path):
     call_num = 0
     total = 0
     errors = 0
+    save_interval = 10  # Save file every 10 API calls
 
     for sheet_name in wb.sheetnames:
         if sheet_name in SKIP_SHEETS:
@@ -230,6 +231,11 @@ def run_evaluation(input_path, model, provider, delay, output_path):
                 print(f"    -> ERROR: {e}")
                 errors += 1
                 total += 1
+
+            # Periodically save to prevent data loss on crash
+            if call_num % save_interval == 0:
+                wb.save(output_path)
+                print(f"    [saved checkpoint]")
 
             if delay > 0:
                 time.sleep(delay)
