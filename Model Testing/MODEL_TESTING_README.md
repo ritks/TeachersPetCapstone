@@ -1,6 +1,6 @@
 # Teacher's Pet — Model Evaluation Guide
 
-This guide explains how to evaluate a Gemini model against the Teacher's Pet middle school math tutor test suite. The evaluation measures both **accuracy** (math correctness, pedagogy) and **safety** (content filtering, child protection, robustness) to determine whether a model is suitable for deployment.
+This guide explains how to evaluate AI models (Gemini, GPT-4o, LLama, Mistral, etc.) against the Teacher's Pet middle school math tutor test suite. The evaluation measures both **accuracy** (math correctness, pedagogy) and **safety** (content filtering, child protection, robustness) to determine whether a model is suitable for deployment.
 
 ---
 
@@ -9,13 +9,23 @@ This guide explains how to evaluate a Gemini model against the Teacher's Pet mid
 1. **Python 3.10+** installed
 2. **Dependencies** installed:
    ```bash
-   pip install google-genai openpyxl python-dotenv
+   pip install google-genai openpyxl python-dotenv requests
    ```
-3. **Gemini API key** set in a `.env` file at the project root:
+3. **API credentials** set in a `.env` file at the project root:
+
+   **For Gemini models:**
    ```
-   GEMINI_API_KEY=your_key_here
+   GEMINI_API_KEY=your_gemini_key_here
    ```
-4. A **paid API tier** is strongly recommended. The test suite contains 149 cases, which will exhaust free tier quotas. Enable billing on your Google Cloud project to unlock Tier 1 limits (~1,000 RPM).
+
+   **For GitHub Models:**
+   ```
+   GITHUB_TOKEN=your_github_token_here
+   ```
+
+4. **Rate limit considerations:**
+   - **Gemini**: A paid tier is recommended. The test suite has 149 cases; free tier will exhaust quotas. Enable billing for Tier 1 (~1,000 RPM).
+   - **GitHub Models (with Copilot Pro)**: Free access. Rate limits (low tier): 150 requests/day, 15 requests/minute. Use `--delay 5` to avoid hitting per-minute limits.
 
 ---
 
@@ -24,35 +34,73 @@ This guide explains how to evaluate a Gemini model against the Teacher's Pet mid
 From the project root:
 
 ```bash
-python3 backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model <model-id>
+python3 backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model <model-id> --provider <provider>
 ```
 
-### Common model IDs
+### Supported Models & Providers
 
-| Model | ID |
-|---|---|
-| Gemini 2.5 Flash Lite | `gemini-2.5-flash-lite` |
-| Gemini 2.5 Flash | `gemini-2.5-flash` |
-| Gemini 2.0 Flash | `gemini-2.0-flash` |
+#### Gemini Models
 
-### Optional flags
+| Model | ID | Provider |
+|---|---|---|
+| Gemini 2.5 Flash Lite | `gemini-2.5-flash-lite` | `gemini` |
+| Gemini 2.5 Flash | `gemini-2.5-flash` | `gemini` |
+| Gemini 2.0 Flash | `gemini-2.0-flash` | `gemini` |
+
+#### GitHub Models (Free with Copilot Pro)
+
+| Model | ID | Provider |
+|---|---|---|
+| OpenAI GPT-4o | `gpt-4o` | `github` |
+| OpenAI GPT-4o Mini | `gpt-4o-mini` | `github` |
+| Meta Llama 3.1 405B | `meta-llama-3.1-405b-instruct` | `github` |
+| Meta Llama 3.1 70B | `meta-llama-3.1-70b-instruct` | `github` |
+| Mistral Large | `mistral-large-2407` | `github` |
+| Cohere Command R+ | `cohere-command-r-plus` | `github` |
+
+### Optional Flags
 
 | Flag | Description | Default |
 |---|---|---|
 | `--input` | Path to the evaluation `.xlsx` file | *(required)* |
-| `--model` | Gemini model ID to test | `gemini-2.5-flash-lite` |
+| `--model` | Model ID to test | (required) |
+| `--provider` | Model provider: `gemini` or `github` | `gemini` |
 | `--delay` | Seconds to wait between API calls | `0` (auto-retry on 429) |
-| `--output` | Output file path | `results_<model>_<date>.xlsx` |
+| `--output` | Output file path | `results_<provider>_<model>_<date>.xlsx` |
 
 ### Examples
 
+#### Gemini (Paid Tier)
+
 ```bash
 # Run on paid tier (no delay needed)
-python3 backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash-lite
-
-# Run on free tier with rate limiting (10 RPM = 6s delay)
-python3 backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash --delay 6
+python3 backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash-lite --provider gemini
 ```
+
+#### Gemini (Free Tier with Rate Limiting)
+
+```bash
+# Free tier: 10 RPM = 6s delay minimum
+python3 backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash --provider gemini --delay 6
+```
+
+#### GitHub Models (Copilot Pro)
+
+```bash
+# GPT-4o (recommended for best quality)
+python3 backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gpt-4o --provider github --delay 10
+
+# Llama 3.1 8B Instruct
+python backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model meta-llama-3.1-8b-instruct --provider github --delay 10
+```
+
+### Retrying Failed Requests
+
+If some requests fail (marked with `[ERROR]` in the output file), you can rerun the script on the same output file to retry only the failed cells:
+
+```bash
+# Rerun on the same file - will skip successful responses and only retry errors
+python backend/test_model.py --input results_github_meta-llama-3.1-8b-instruct_2026-02-08.xlsx --model meta-llama-3.1-8b-instruct --provider github --delay 10 --output results_github_meta-llama-3.1-8b-instruct_2026-02-08.xlsx
 
 ### Output
 
@@ -156,12 +204,24 @@ Covers: Ambiguous input, nonsense input, impossible problems (division by zero, 
 
 ## Rate Limits Reference
 
-| Tier | RPM | Notes |
-|---|---|---|
-| Free | ~10–15 | Use `--delay 6`. Also subject to low daily caps (~20–250 RPD depending on model). |
-| Tier 1 (Paid) | ~1,000 | Enable billing on your Google Cloud project. No delay needed. |
+### Gemini (Google)
+
+| Tier | RPM | RPD | Notes |
+|---|---|---|---|
+| Free | ~10–15 | ~20–250 | Use `--delay 6`. Subject to low daily caps. |
+| Tier 1 (Paid) | ~1,000 | ~1,000,000 | Enable billing on your Google Cloud project. No delay needed. |
 
 Check your current limits at [AI Studio](https://aistudio.google.com) under your project quota settings.
+
+### GitHub Models (with Copilot Pro)
+
+| Tier | RPM | RPD | Tokens/Request | Notes |
+|---|---|---|---|---|
+| Low | 15 | 150 | 8000 in, 4000 out | For most models (GPT-4o, Llama, Mistral, etc.). Use `--delay 5`. |
+| High | 10 | 50 | 16000 in, 8000 out | Limited models (other variants). |
+| Restricted | 1–2 | 8–12 | 4000 in, 4000 out | o1/o3/gpt-5 variants. Too limited for full evaluation. |
+
+See [GitHub Models Documentation](https://docs.github.com/en/github-models/use-github-models/prototyping-with-ai-models) for rate limits by model.
 
 ---
 

@@ -3,3 +3,4 @@ uvicorn
 google-genai
 python-dotenv
 requests
+openpyxl

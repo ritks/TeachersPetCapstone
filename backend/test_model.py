@@ -2,14 +2,17 @@
 """
 Model evaluation script for Teacher's Pet math tutor AI.
 
-Reads test cases from the evaluation xlsx, queries the Gemini API using the
+Reads test cases from the evaluation xlsx, queries either Gemini or GitHub Models API using the
 same system prompt as production, and writes responses into the "Actual Output"
 column of each sheet. Saves results as a new xlsx for manual scoring.
 
 Usage:
-    python test_model.py --input ../math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash-lite
-    python test_model.py --input ../math_tutor_ai_eval_testcases.xlsx --model gemini-2.0-flash
-    python test_model.py --input ../math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash-lite --delay 2.0
+    # Gemini models
+    python test_model.py --input ../math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash-lite --provider gemini
+    
+    # GitHub Models
+    python test_model.py --input ../math_tutor_ai_eval_testcases.xlsx --model gpt-4o --provider github
+    python test_model.py --input ../math_tutor_ai_eval_testcases.xlsx --model meta-llama-3.1-405b-instruct --provider github
 """
 
 import argparse
@@ -57,8 +60,8 @@ def find_col(headers, name):
     return None
 
 
-def query_model(client, model, question, retries=3):
-    """Send a question to the model, auto-retrying on rate limit or overload errors."""
+def query_gemini(client, model, question, retries=3):
+    """Send a question to Gemini, auto-retrying on rate limit or overload errors."""
     for attempt in range(retries):
         try:
             response = client.models.generate_content(
@@ -78,8 +81,62 @@ def query_model(client, model, question, retries=3):
                 raise
 
 
+def query_github(token, model, question, retries=3):
+    """Send a question to GitHub Models API."""
+    import requests
+    
+    endpoint = "https://models.inference.ai.azure.com/chat/completions"
+    
+    for attempt in range(retries):
+        try:
+            response = requests.post(
+                endpoint,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {token}"
+                },
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": question}
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 2000
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                return data["choices"][0]["message"]["content"]
+            elif response.status_code == 429 and attempt < retries - 1:
+                wait = 5
+                print(f"    -> rate limited, waiting {wait}s then retrying...")
+                time.sleep(wait)
+            else:
+                response.raise_for_status()
+                
+        except Exception as e:
+            if attempt < retries - 1:
+                print(f"    -> error: {e}, retrying...")
+                time.sleep(3)
+            else:
+                raise
+
+
+def query_model(client_or_token, model, question, provider="gemini", retries=3):
+    """Send a question to the appropriate model provider."""
+    if provider == "gemini":
+        return query_gemini(client_or_token, model, question, retries)
+    elif provider == "github":
+        return query_github(client_or_token, model, question, retries)
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
+
+
 def count_questions(wb):
-    """Count total non-empty prompts across all test sheets."""
+    """Count total non-empty prompts across all test sheets that need processing."""
     count = 0
     for sheet_name in wb.sheetnames:
         if sheet_name in SKIP_SHEETS:
@@ -87,21 +144,33 @@ def count_questions(wb):
         ws = wb[sheet_name]
         headers = [cell.value for cell in ws[1]]
         prompt_col = find_col(headers, PROMPT_HEADER)
-        if prompt_col is None:
+        output_col = find_col(headers, OUTPUT_HEADER)
+        if prompt_col is None or output_col is None:
             continue
         for row_idx in range(2, ws.max_row + 1):
             val = ws.cell(row=row_idx, column=prompt_col).value
             if val and str(val).strip():
-                count += 1
+                # Only count if output is empty or contains an error
+                existing_output = ws.cell(row=row_idx, column=output_col).value
+                if not existing_output or not str(existing_output).strip() or str(existing_output).startswith("[ERROR]"):
+                    count += 1
     return count
 
 
-def run_evaluation(input_path, model, delay, output_path):
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY not set in environment or .env file")
-
-    client = genai.Client(api_key=api_key)
+def run_evaluation(input_path, model, provider, delay, output_path):
+    # Initialize client based on provider
+    if provider == "gemini":
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY not set in environment or .env file")
+        client_or_token = genai.Client(api_key=api_key)
+    elif provider == "github":
+        token = os.getenv("GITHUB_TOKEN")
+        if not token:
+            raise ValueError("GITHUB_TOKEN not set in environment or .env file")
+        client_or_token = token
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
 
     wb = openpyxl.load_workbook(input_path)
 
@@ -137,14 +206,22 @@ def run_evaluation(input_path, model, delay, output_path):
             if not question or str(question).strip() == "":
                 continue
 
+            # Check if cell already has a successful response
+            existing_output = ws.cell(row=row_idx, column=output_col).value
+            if existing_output and str(existing_output).strip() and not str(existing_output).startswith("[ERROR]"):
+                # Skip cells that already have successful responses
+                continue
+
             call_num += 1
             question = str(question).strip()
             row_id = ws.cell(row=row_idx, column=1).value or f"row {row_idx}"
             preview = question[:72] + ("..." if len(question) > 72 else "")
-            print(f"  [{call_num}/{grand_total}] {row_id}: {preview}")
+            # Indicate if this is a retry
+            retry_label = " (retry)" if existing_output else ""
+            print(f"  [{call_num}/{grand_total}] {row_id}: {preview}{retry_label}")
 
             try:
-                response = query_model(client, model, question)
+                response = query_model(client_or_token, model, question, provider)
                 ws.cell(row=row_idx, column=output_col).value = response
                 print(f"    -> {len(response)} chars")
                 total += 1
@@ -165,15 +242,19 @@ def run_evaluation(input_path, model, delay, output_path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Evaluate a Gemini model against the Teacher's Pet test suite."
+        description="Evaluate a model against the Teacher's Pet test suite."
     )
     parser.add_argument(
         "--input", required=True,
         help="Path to the evaluation xlsx file"
     )
     parser.add_argument(
-        "--model", default="gemini-2.5-flash-lite",
-        help="Gemini model ID to test (default: gemini-2.5-flash-lite)"
+        "--model", required=True,
+        help="Model ID to test (e.g., gemini-2.5-flash-lite, gpt-4o, meta-llama-3.1-405b-instruct)"
+    )
+    parser.add_argument(
+        "--provider", choices=["gemini", "github"], default="gemini",
+        help="Model provider: gemini or github (default: gemini)"
     )
     parser.add_argument(
         "--delay", type=float, default=0.0,
@@ -181,22 +262,23 @@ def main():
     )
     parser.add_argument(
         "--output", default=None,
-        help="Output xlsx path (default: results_<model>_<date>.xlsx)"
+        help="Output xlsx path (default: results_<provider>_<model>_<date>.xlsx)"
     )
     args = parser.parse_args()
 
     if args.output is None:
         today = date.today().isoformat()
         safe_model = args.model.replace("/", "-").replace(":", "-")
-        args.output = f"results_{safe_model}_{today}.xlsx"
+        args.output = f"results_{args.provider}_{safe_model}_{today}.xlsx"
 
-    print(f"Input:  {args.input}")
-    print(f"Model:  {args.model}")
-    print(f"Delay:  {args.delay}s between requests")
-    print(f"Output: {args.output}")
+    print(f"Input:    {args.input}")
+    print(f"Provider: {args.provider}")
+    print(f"Model:    {args.model}")
+    print(f"Delay:    {args.delay}s between requests")
+    print(f"Output:   {args.output}")
     print()
 
-    run_evaluation(args.input, args.model, args.delay, args.output)
+    run_evaluation(args.input, args.model, args.provider, args.delay, args.output)
 
 
 if __name__ == "__main__":
