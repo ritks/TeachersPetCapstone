@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 import os
 from dotenv import load_dotenv
+from google.genai import types
 
 load_dotenv()
 
@@ -26,6 +27,26 @@ client = genai.Client(api_key=api_key)
 
 SYSTEM_PROMPT = "You are a helpful math tutor. Explain clearly and step-by-step."
 
+# Safety settings
+SAFETY_SETTINGS = [
+    types.SafetySetting(
+        category="HARM_CATEGORY_HARASSMENT",
+        threshold="BLOCK_LOW_AND_ABOVE",
+    ),
+    types.SafetySetting(
+        category="HARM_CATEGORY_HATE_SPEECH",
+        threshold="BLOCK_LOW_AND_ABOVE",
+    ),
+    types.SafetySetting(
+        category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        threshold="BLOCK_LOW_AND_ABOVE",
+    ),
+    types.SafetySetting(
+        category="HARM_CATEGORY_DANGEROUS_CONTENT",
+        threshold="BLOCK_LOW_AND_ABOVE",
+    ),
+]
+
 
 @app.post("/ask")
 async def ask(data: dict):
@@ -37,7 +58,10 @@ async def ask(data: dict):
         
         response = client.models.generate_content(
             model="gemini-2.5-flash-lite",
-            contents=f"{SYSTEM_PROMPT}\n\nStudent: {question}"
+            contents=f"{SYSTEM_PROMPT}\n\nStudent: {question}",
+            config=types.GenerateContentConfig(
+                safety_settings=SAFETY_SETTINGS,
+            ),
         )
         return {"answer": response.text}
     except Exception as e:
