@@ -1,5 +1,7 @@
 .venv
 .env
+__pycache__/
+*.pyc
 results_github_gpt-4o_2026-02-08.xlsx
 results_github_meta-llama-3.1-8b-instruct_2026-02-08.xlsx
 
