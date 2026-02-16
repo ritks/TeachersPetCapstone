@@ -10,6 +10,7 @@ export default function App() {
   const [messages, setMessages] = useState([WELCOME_MESSAGE])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sessionId, setSessionId] = useState(null)
   const scrollRef = useRef(null)
 
   useEffect(() => {
@@ -26,12 +27,13 @@ export default function App() {
     setLoading(true)
 
     try {
-      const res = await fetch('http://localhost:8000/ask', {
+      const res = await fetch('http://localhost:8000/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question, session_id: sessionId }),
       })
       const data = await res.json()
+      setSessionId(data.session_id)
       setMessages((prev) => [
         ...prev,
         { role: 'tutor', content: data.answer, isError: data.error },
