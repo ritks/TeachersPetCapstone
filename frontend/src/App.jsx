@@ -45,6 +45,8 @@ export default function App() {
 
   useEffect(() => {
     refreshDocuments()
+    setMessages([WELCOME_MESSAGE])
+    setSessionId(null)
   }, [selectedModuleId])
 
   useEffect(() => {
