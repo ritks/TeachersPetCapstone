@@ -14,7 +14,20 @@ export default function App() {
   const [modules, setModules] = useState([])
   const [selectedModuleId, setSelectedModuleId] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [documents, setDocuments] = useState([])
   const scrollRef = useRef(null)
+
+  const refreshDocuments = async (moduleId) => {
+    const id = moduleId ?? selectedModuleId
+    if (!id) { setDocuments([]); return }
+    try {
+      const res = await fetch(`http://localhost:8000/modules/${id}/documents`)
+      const data = await res.json()
+      setDocuments(data)
+    } catch {
+      setDocuments([])
+    }
+  }
 
   const refreshModules = async () => {
     try {
@@ -29,6 +42,10 @@ export default function App() {
   useEffect(() => {
     refreshModules()
   }, [])
+
+  useEffect(() => {
+    refreshDocuments()
+  }, [selectedModuleId])
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -84,6 +101,8 @@ export default function App() {
         selectedModuleId={selectedModuleId}
         onSelect={setSelectedModuleId}
         onModuleCreated={refreshModules}
+        documents={documents}
+        onDocumentsChanged={refreshDocuments}
       />
 
       <div className="flex flex-col flex-1 min-w-0">
@@ -112,7 +131,7 @@ export default function App() {
 }
 
 /* ---------------------------------------------------------- sidebar */
-function Sidebar({ open, onToggle, modules, selectedModuleId, onSelect, onModuleCreated }) {
+function Sidebar({ open, onToggle, modules, selectedModuleId, onSelect, onModuleCreated, documents, onDocumentsChanged }) {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDesc, setNewDesc] = useState('')
@@ -206,6 +225,15 @@ function Sidebar({ open, onToggle, modules, selectedModuleId, onSelect, onModule
         ))}
       </div>
 
+      {/* documents */}
+      {selectedModuleId && (
+        <DocumentPanel
+          moduleId={selectedModuleId}
+          documents={documents}
+          onDocumentsChanged={onDocumentsChanged}
+        />
+      )}
+
       {/* create module */}
       <div className="border-t border-gray-100 px-3 py-3">
         {showCreateForm ? (
@@ -252,6 +280,127 @@ function Sidebar({ open, onToggle, modules, selectedModuleId, onSelect, onModule
         )}
       </div>
     </aside>
+  )
+}
+
+/* ------------------------------------------------------- documents */
+function DocumentPanel({ moduleId, documents, onDocumentsChanged }) {
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef(null)
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+
+    setUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const uploadRes = await fetch(
+        `http://localhost:8000/modules/${moduleId}/documents`,
+        { method: 'POST', body: form },
+      )
+      const doc = await uploadRes.json()
+
+      await fetch(
+        `http://localhost:8000/modules/${moduleId}/documents/${doc.id}/process`,
+        { method: 'POST' },
+      )
+    } catch {
+      /* handled via status in document list */
+    } finally {
+      setUploading(false)
+      onDocumentsChanged()
+    }
+  }
+
+  const handleDelete = async (docId) => {
+    try {
+      await fetch(
+        `http://localhost:8000/modules/${moduleId}/documents/${docId}`,
+        { method: 'DELETE' },
+      )
+    } catch {
+      /* ignore */
+    }
+    onDocumentsChanged()
+  }
+
+  const statusBadge = (doc) => {
+    const base = 'inline-block text-xs px-1.5 py-0.5 rounded-full font-medium'
+    switch (doc.status) {
+      case 'processing':
+        return <span className={`${base} bg-amber-100 text-amber-700 animate-pulse`}>processing</span>
+      case 'processed':
+        return (
+          <span className={`${base} bg-green-100 text-green-700`}>
+            processed{doc.chunk_count != null ? ` (${doc.chunk_count})` : ''}
+          </span>
+        )
+      case 'error':
+        return (
+          <span className={`${base} bg-red-100 text-red-600`} title={doc.error_message || 'Processing error'}>
+            error
+          </span>
+        )
+      default:
+        return <span className={`${base} bg-gray-100 text-gray-500`}>uploaded</span>
+    }
+  }
+
+  return (
+    <div className="border-t border-gray-100 px-3 py-2">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Documents</span>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-40"
+        >
+          {uploading ? 'Uploading...' : '+ Upload'}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.txt"
+          onChange={handleUpload}
+          className="hidden"
+        />
+      </div>
+
+      {documents.length === 0 && !uploading && (
+        <p className="text-xs text-gray-400 py-1">No documents yet.</p>
+      )}
+
+      <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+        {documents.map((doc) => (
+          <div
+            key={doc.id}
+            className="flex items-center justify-between gap-1 rounded-md bg-gray-50 px-2 py-1.5 text-xs"
+          >
+            <div className="min-w-0 flex-1">
+              <span className="block truncate text-gray-700" title={doc.filename}>{doc.filename}</span>
+              {statusBadge(doc)}
+            </div>
+            <button
+              onClick={() => handleDelete(doc.id)}
+              className="flex-shrink-0 w-5 h-5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
+              title="Delete document"
+            >
+              &#10005;
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {uploading && (
+        <div className="flex items-center gap-1.5 py-1 text-xs text-amber-600">
+          <span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+          Uploading & processing...
+        </div>
+      )}
+    </div>
   )
 }
 

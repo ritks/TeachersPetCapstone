@@ -6,7 +6,7 @@ from typing import Optional
 class EmbeddingService:
     """Thin wrapper around the Gemini text-embedding API."""
 
-    MODEL = "text-embedding-004"
+    MODEL = "gemini-embedding-001"
 
     def __init__(self, client: Optional[genai.Client] = None):
         if client:
