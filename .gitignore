@@ -2,3 +2,5 @@
 .env
 results_github_gpt-4o_2026-02-08.xlsx
 results_github_meta-llama-3.1-8b-instruct_2026-02-08.xlsx
+SCORED-results_llama-3_1-8b-instruct_2026-02-08.xlsx
+results_github_phi-4-mini-reasoning_2026-02-09.xlsx

@@ -118,6 +118,16 @@ def query_github(token, model, question, retries=3):
                 response.raise_for_status()
                 
         except Exception as e:
+            # If this is an HTTP 400 (Bad Request) from the provider, do not retry —
+            # these are blocked by safety filters and will not succeed on retry.
+            try:
+                # Many requests exceptions expose a response with a status_code
+                if hasattr(e, 'response') and e.response is not None and getattr(e.response, 'status_code', None) == 400:
+                    raise
+            except Exception:
+                # If we intentionally re-raised, let it bubble up to the caller
+                raise
+
             if attempt < retries - 1:
                 print(f"    -> error: {e}, retrying...")
                 time.sleep(3)
@@ -150,10 +160,19 @@ def count_questions(wb):
         for row_idx in range(2, ws.max_row + 1):
             val = ws.cell(row=row_idx, column=prompt_col).value
             if val and str(val).strip():
-                # Only count if output is empty or contains an error
+                # Only count if output is empty or contains a non-HTTP-400 error
                 existing_output = ws.cell(row=row_idx, column=output_col).value
-                if not existing_output or not str(existing_output).strip() or str(existing_output).startswith("[ERROR]"):
+                if not existing_output or not str(existing_output).strip():
                     count += 1
+                else:
+                    out = str(existing_output)
+                    # If previously marked as a blocked 400, skip it (do not retry)
+                    if out.startswith("[ERROR]"):
+                        if "400" in out or "Bad Request" in out or out.startswith("[BLOCKED]"):
+                            # skip blocked entries
+                            pass
+                        else:
+                            count += 1
     return count
 
 
@@ -180,7 +199,7 @@ def run_evaluation(input_path, model, provider, delay, output_path):
     call_num = 0
     total = 0
     errors = 0
-    save_interval = 10  # Save file every 10 API calls
+    save_interval = 3  # Save file every 3 API calls
 
     for sheet_name in wb.sheetnames:
         if sheet_name in SKIP_SHEETS:
@@ -227,8 +246,14 @@ def run_evaluation(input_path, model, provider, delay, output_path):
                 print(f"    -> {len(response)} chars")
                 total += 1
             except Exception as e:
-                ws.cell(row=row_idx, column=output_col).value = f"[ERROR] {e}"
-                print(f"    -> ERROR: {e}")
+                err_str = str(e)
+                # Treat HTTP 400 / Bad Request as blocked by provider safety filter — skip retrying
+                if "400" in err_str or "Bad Request" in err_str:
+                    ws.cell(row=row_idx, column=output_col).value = f"[BLOCKED] {e}"
+                    print(f"    -> BLOCKED: {e}")
+                else:
+                    ws.cell(row=row_idx, column=output_col).value = f"[ERROR] {e}"
+                    print(f"    -> ERROR: {e}")
                 errors += 1
                 total += 1
 
