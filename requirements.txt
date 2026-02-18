@@ -4,3 +4,7 @@ google-genai
 python-dotenv
 requests
 openpyxl
+sqlalchemy
+chromadb
+PyMuPDF
+python-multipart
