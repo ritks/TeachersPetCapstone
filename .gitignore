@@ -1,6 +1,17 @@
 .venv
 .env
+__pycache__/
+*.pyc
 results_github_gpt-4o_2026-02-08.xlsx
 results_github_meta-llama-3.1-8b-instruct_2026-02-08.xlsx
+
+# OS files
+.DS_Store
+
+# Textbook PDF
+Textbook.pdf
+
+# RAG data (database, vector store, uploads)
+backend/data/
 SCORED-results_llama-3_1-8b-instruct_2026-02-08.xlsx
 results_github_phi-4-mini-reasoning_2026-02-09.xlsx
