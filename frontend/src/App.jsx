@@ -1,4 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
+import rehypeKatex from 'rehype-katex'
+import remarkMath from 'remark-math'
+import 'katex/dist/katex.min.css'
 
 const WELCOME_MESSAGE = {
   role: 'tutor',
@@ -456,18 +460,27 @@ function Bubble({ message }) {
               : 'bg-white border border-gray-100 rounded-2xl rounded-bl-sm',
         ].join(' ')}
       >
-        <p
-          className={[
-            'text-sm leading-relaxed whitespace-pre-wrap',
-            isStudent
-              ? 'text-white'
-              : message.isError
-                ? 'text-red-600'
-                : 'text-gray-700',
-          ].join(' ')}
-        >
-          {message.content}
-        </p>
+        {isStudent ? (
+          <p
+            className={[
+              'text-sm leading-relaxed whitespace-pre-wrap',
+              isStudent
+                ? 'text-white'
+                : message.isError
+                  ? 'text-red-600'
+                  : 'text-gray-700',
+            ].join(' ')}
+          >
+            {message.content}
+          </p>
+        ) : (
+          <ReactMarkdown
+            remarkPlugins={[remarkMath]}
+            rehypePlugins={[rehypeKatex]}
+          >
+            {message.content}
+          </ReactMarkdown>
+        )}
       </div>
     </div>
   )
