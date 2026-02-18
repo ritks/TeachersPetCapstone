@@ -16,6 +16,7 @@ from rag.embeddings import EmbeddingService
 from rag.vector_store import VectorStore
 from rag.retriever import Retriever
 from rag.document_processor import DocumentProcessor
+from rag.validator import ResponseValidator
 
 load_dotenv()
 
@@ -42,6 +43,14 @@ embedding_service = EmbeddingService(client=client)
 vector_store = VectorStore()
 retriever = Retriever(embedding_service, vector_store)
 document_processor = DocumentProcessor(embedding_service, vector_store)
+
+# ── Response validator (required) ──────────────────────────────────────────────
+try:
+    validator = ResponseValidator()
+    print("[INFO] Response validation ENABLED")
+except ValueError as e:
+    print(f"[ERROR] Response validation failed to initialize: {e}")
+    raise
 
 # ── Constants ─────────────────────────────────────────────────────────
 BASE_SYSTEM_PROMPT = (
@@ -81,6 +90,7 @@ class ConversationResponse(BaseModel):
     answer: str
     session_id: str
     error: Optional[bool] = False
+    validation: Optional[dict] = None  # Validation metadata from GitHub models
 
 
 class ModuleCreate(BaseModel):
@@ -194,10 +204,28 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
 
         answer = response.text
 
+        # ---- Validation with GitHub models (required) ----
+        validation_result = None
+        try:
+            validation_result = validator.validate(question, answer)
+            # If unsafe, reject the response
+            if not validation_result["is_safe"]:
+                print(f"[WARN] Response flagged as unsafe. Votes: {validation_result['safety_votes']}")
+                return ConversationResponse(
+                    answer="I'm not able to provide that response. Please rephrase your question.",
+                    session_id=session_id,
+                    validation=validation_result,
+                    error=False
+                )
+        except Exception as e:
+            # Log validation error but don't block response
+            print(f"[ERROR] Validation failed: {e}")
+            validation_result = {"error": str(e)}
+
         conversations[session_id].append({"role": "user", "content": question})
         conversations[session_id].append({"role": "assistant", "content": answer})
 
-        return ConversationResponse(answer=answer, session_id=session_id)
+        return ConversationResponse(answer=answer, session_id=session_id, validation=validation_result)
 
     except HTTPException:
         raise
