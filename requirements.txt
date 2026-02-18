@@ -8,3 +8,4 @@ sqlalchemy
 chromadb
 PyMuPDF
 python-multipart
+python-dotenv
