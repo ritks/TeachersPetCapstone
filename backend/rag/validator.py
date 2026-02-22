@@ -15,7 +15,7 @@ class ResponseValidator:
     ENDPOINT = "https://models.inference.ai.azure.com/chat/completions"
     DEFAULT_VALIDATORS = [
         "meta-llama-3.1-8b-instruct",
-        "phi-4-mini-instruct"
+        "gpt-4.1-mini"
     ]
     
     def __init__(self, github_token: Optional[str] = None):
