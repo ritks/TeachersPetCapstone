@@ -98,6 +98,7 @@ class ModuleCreate(BaseModel):
     description: Optional[str] = None
     grade_level: int = 8
     topics: list[str] = []
+    teacher_uid: Optional[str] = None
 
 
 class ModuleUpdate(BaseModel):
@@ -115,6 +116,7 @@ class ModuleResponse(BaseModel):
     topics: list
     document_count: int
     chunk_count: int
+    teacher_uid: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -281,6 +283,7 @@ async def create_module(body: ModuleCreate, db: Session = Depends(get_db)):
         description=body.description,
         grade_level=body.grade_level,
         topics=body.topics,
+        teacher_uid=body.teacher_uid,
     )
     db.add(module)
     db.commit()
@@ -289,8 +292,11 @@ async def create_module(body: ModuleCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/modules", response_model=list[ModuleResponse])
-async def list_modules(db: Session = Depends(get_db)):
-    modules = db.query(Module).order_by(Module.created_at).all()
+async def list_modules(teacher_uid: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(Module)
+    if teacher_uid:
+        query = query.filter(Module.teacher_uid == teacher_uid)
+    modules = query.order_by(Module.created_at).all()
     return [_module_to_response(m) for m in modules]
 
 
@@ -478,6 +484,7 @@ def _module_to_response(module: Module) -> ModuleResponse:
         topics=module.topics or [],
         document_count=len(module.documents),
         chunk_count=vector_store.get_chunk_count(module_id=module.id),
+        teacher_uid=module.teacher_uid,
     )
 
 

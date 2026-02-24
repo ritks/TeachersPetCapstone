@@ -22,6 +22,7 @@ class Module(Base):
     description = Column(Text, nullable=True)
     grade_level = Column(Integer, default=8)
     topics = Column(JSON, default=list)
+    teacher_uid = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
