@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+python-dotenv
+google-genai
+pymupdf
+openai
+chromadb
+requests
+openpyxl
+httpx

@@ -1,16 +1,41 @@
-# React + Vite
+# Teacher's Pet — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite frontend for the Teacher's Pet math tutoring app.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```sh
+npm install
+npm run dev
+```
 
-## React Compiler
+Requires the backend running on http://localhost:8000 and a `frontend/.env` file with Firebase credentials. See the root [README](../README.md) for full setup instructions.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Key Files
 
-## Expanding the ESLint configuration
+```
+src/
+├── firebase.js                  # Firebase app, auth, Firestore exports
+├── main.jsx                     # Entry point — wraps app in AuthProvider
+├── App.jsx                      # All routing and page logic
+├── contexts/
+│   └── AuthContext.jsx          # useAuth() hook (login, register, Google, logout)
+└── components/
+    ├── EntryPage.jsx             # Landing page (Student / Teacher / Guest)
+    ├── TeacherLoginPage.jsx      # Email+password and Google OAuth
+    ├── StudentEntryPage.jsx      # Course code entry
+    └── AnalyticsDashboard.jsx    # Teacher view of student chat logs
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Environment Variables
+
+Create `frontend/.env`:
+
+```
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+```
