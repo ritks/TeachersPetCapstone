@@ -42,17 +42,23 @@ export default function TeacherLoginPage({ onSuccess }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-purple-50 flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center mx-auto mb-3 shadow-lg">
-            <span className="text-white font-bold text-lg">TP</span>
+          <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-indigo-500" viewBox="0 0 24 24" fill="currentColor">
+              <ellipse cx="5.5" cy="6.5" rx="2.5" ry="3" />
+              <ellipse cx="10" cy="4" rx="2" ry="2.5" />
+              <ellipse cx="14.5" cy="4" rx="2" ry="2.5" />
+              <ellipse cx="18.5" cy="6.5" rx="2" ry="2.5" />
+              <path d="M12 9c-4.418 0-8 2.686-8 6 0 2.21 3.582 4 8 4s8-1.79 8-4c0-3.314-3.582-6-8-6z" />
+            </svg>
           </div>
           <h2 className="text-2xl font-bold text-gray-800">Teacher Portal</h2>
-          <p className="text-gray-500 text-sm mt-1">Sign in to manage your modules</p>
+          <p className="text-gray-400 text-sm mt-1">Sign in to manage your modules</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           {/* mode toggle */}
           <div className="flex rounded-lg bg-gray-100 p-1 mb-5">
             <button
@@ -88,7 +94,7 @@ export default function TeacherLoginPage({ onSuccess }) {
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Your name"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
               />
             )}
 
@@ -99,7 +105,7 @@ export default function TeacherLoginPage({ onSuccess }) {
               placeholder="Email address"
               required
               autoComplete="email"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
             />
 
             <input
@@ -109,13 +115,13 @@ export default function TeacherLoginPage({ onSuccess }) {
               placeholder="Password"
               required
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
             />
 
             <button
               type="submit"
               disabled={loading || !email || !password}
-              className="w-full rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-semibold py-2.5 shadow-sm hover:shadow-md hover:from-purple-700 hover:to-indigo-700 disabled:opacity-40 transition-all mt-1"
+              className="w-full rounded-lg bg-indigo-600 text-white text-sm font-semibold py-2.5 hover:bg-indigo-700 disabled:opacity-40 transition-colors mt-1"
             >
               {loading ? 'Please wait...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
             </button>
@@ -130,7 +136,7 @@ export default function TeacherLoginPage({ onSuccess }) {
           <button
             onClick={handleGoogle}
             disabled={loading}
-            className="w-full rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium py-2.5 flex items-center justify-center gap-2 hover:bg-gray-50 disabled:opacity-40 transition-all shadow-sm"
+            className="w-full rounded-lg border border-gray-200 bg-white text-gray-700 text-sm font-medium py-2.5 flex items-center justify-center gap-2 hover:bg-gray-50 disabled:opacity-40 transition-all"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
