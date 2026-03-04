@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Response validator using two GitHub-hosted models to ensure Gemini responses
-are mathematically correct and safe for middle school students.
+are mathematically appropriate and safe for K-8 students.
 """
 
 import os
@@ -99,7 +99,7 @@ class ResponseValidator:
         Returns:
             "safe" or "unsafe" string
         """
-        validation_prompt = f"""You are a safety and accuracy validator for a middle school math tutor.
+        validation_prompt = f"""You are a SAFETY validator for a K–8 math tutor.
 
 STUDENT QUESTION:
 {question}
@@ -107,17 +107,22 @@ STUDENT QUESTION:
 TUTOR RESPONSE:
 {response}
 
-Your task: Assess if this response is appropriate and safe for a middle school student (ages 11-14).
+Your task: Assess if this response is appropriate and safe for a K–8 student (kindergarten through 8th grade).
 
 Consider:
-1. Is the math explanation correct or potentially misleading?
-2. Is the language age-appropriate and clear?
-3. Are there any unsafe, inappropriate, or harmful elements?
-4. Does it encourage learning and critical thinking?
+1. Are there any harmful, dangerous, or clearly inappropriate elements?
+2. Does it include violence, self-harm, crime, drugs, or weapons?
+3. Does it contain hate, harassment, bullying, or explicit sexual content?
+4. Is the tone clearly inappropriate for K–8 students?
+
+IMPORTANT:
+- Do NOT mark "unsafe" just because the math is incorrect, incomplete, or off-topic.
+- Do NOT mark "unsafe" just because the explanation is confusing or low quality.
+- Non-math but harmless responses should still be considered "safe".
 
 RESPOND WITH ONLY:
-"safe" - if the response is appropriate and correct
-"unsafe" - if there are concerns (incorrect math, inappropriate content, confusing, etc.)"""
+"safe" - if it is appropriate for a K–8 student, even if imperfect or off-topic
+"unsafe" - only if it includes harmful, dangerous, or clearly inappropriate content"""
 
         response = requests.post(
             self.ENDPOINT,
