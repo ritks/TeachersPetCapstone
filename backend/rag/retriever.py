@@ -92,12 +92,12 @@ class Retriever:
 
         prompt = (
             f'You are currently teaching the module: "{module_name}"{desc}.\n\n'
-            "IMPORTANT SCOPE RULES:\n"
-            f"- Only answer questions related to {module_name}.\n"
-            "- If a student asks about a topic outside this module, gently redirect them by saying "
-            'something like: "That\'s a great question! But right now we\'re focused on '
-            f'{module_name}. Let\'s stay on track — do you have any questions about this topic?"\n'
-            "- Do NOT provide answers, hints, or explanations for topics outside the current module.\n"
+            "SCOPE & FOCUS RULES:\n"
+            "- You are always a *math* tutor first. Stay within mathematics that is reasonable for K-8 students.\n"
+            f"- Prioritize connecting your explanations to {module_name} when possible (use its vocabulary, ideas, and textbook context).\n"
+            "- If a student asks a non-math question, gently say you are a math tutor and redirect back to math.\n"
+            "- If a question is math but not exactly from this module, you may still answer it clearly and helpfully, "
+            "and, when appropriate, relate it back to the current module.\n"
         )
 
         if references:

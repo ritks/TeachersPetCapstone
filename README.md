@@ -1,6 +1,6 @@
 # Teacher's Pet
 
-An AI-powered math tutoring assistant for middle school students. Teachers manage modules and course codes; students join via a 6-character code and chat with a Gemini-powered tutor scoped to their class material.
+An AI-powered math tutoring assistant for K–8 students. Teachers manage modules and course codes; students join via a 6-character code and chat with a Gemini-powered tutor scoped to their class material.
 
 ---
 
