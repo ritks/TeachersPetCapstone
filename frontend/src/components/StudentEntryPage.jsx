@@ -20,8 +20,8 @@ export default function StudentEntryPage({ onSuccess }) {
         setError("Invalid code. Ask your teacher for the correct code.")
         return
       }
-      const { moduleId, moduleName, teacherUid } = snap.data()
-      const studentData = { courseCode: trimmed, moduleId, moduleName, teacherUid: teacherUid ?? null }
+      const { moduleId, moduleName, teacherUid, teacherName } = snap.data()
+      const studentData = { courseCode: trimmed, moduleId, moduleName, teacherUid: teacherUid ?? null, teacherName: teacherName ?? null }
       localStorage.setItem('tp_student', JSON.stringify(studentData))
       onSuccess(studentData)
     } catch {
