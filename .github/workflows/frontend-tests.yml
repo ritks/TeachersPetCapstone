@@ -11,6 +11,7 @@ on:
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend-tests.yml'
+  workflow_call:
 
 jobs:
   unit-tests:

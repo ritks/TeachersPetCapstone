@@ -11,6 +11,7 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/backend-tests.yml'
+  workflow_call:
 
 jobs:
   test:
