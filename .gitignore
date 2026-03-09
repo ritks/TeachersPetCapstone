@@ -19,3 +19,8 @@ Textbook.pdf
 # RAG data (database, vector store, uploads)
 backend/data/
 SCORED-results_llama-3_1-8b-instruct_2026-02-08.xlsx
+
+# Playwright and Vitest test artifacts
+frontend/.playwright/
+frontend/test-results/
+test-results/

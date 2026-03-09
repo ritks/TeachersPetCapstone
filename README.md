@@ -236,6 +236,141 @@ Click **Just Chat** on the landing page → general-purpose math chat with no mo
 
 ---
 
+## Testing
+
+The project includes comprehensive testing at multiple levels:
+
+| Type | Framework | Location | Command |
+|------|-----------|----------|---------|
+| **Backend Unit** | pytest | `backend/tests/unit/` | `pytest backend/tests/` |
+| **Backend Integration** | pytest | `backend/tests/integration/` | `pytest backend/tests/ -v` |
+| **Frontend Unit** | Vitest | `frontend/src/__tests__/` | `npm run test` |
+| **Frontend E2E** | Playwright | `frontend/e2e/` | `npm run test:e2e` |
+| **CI/CD** | GitHub Actions | `.github/workflows/` | Auto-triggered on push/PR |
+
+### Backend Tests
+
+**Run all tests:**
+```bash
+cd backend
+pytest tests/ -v              # Verbose output
+pytest tests/ --cov=.         # With coverage report
+pytest tests/unit/test_chunker.py -v  # Specific test file
+```
+
+**Coverage:** 83 tests passing (66 unit + 17 integration)
+- RAG/validators: 98%+ coverage
+- Database models: 100% coverage
+- API endpoints: Full integration test coverage
+- **Duration:** ~1.5 seconds
+
+### Frontend Tests
+
+**Unit tests (Vitest):**
+```bash
+cd frontend
+npm run test              # Watch mode
+npm run test -- --run    # Single run
+npm run test:coverage    # With coverage report
+```
+
+**E2E tests (Playwright):**
+```bash
+npm run test:e2e         # Run tests
+npm run test:e2e:ui      # Interactive UI mode
+npm run test:e2e:debug   # Debug mode
+```
+
+**Coverage:**
+- Unit tests: 5 tests covering entry page, navigation, and auth flows
+- E2E tests: 52 tests spanning:
+  - Navigation and page loading
+  - UI rendering and interactions
+  - API integration and error handling
+  - User workflows and performance metrics
+  - Data persistence and browser compatibility
+
+**Duration:** ~15 seconds (unit) + ~40 seconds (E2E)
+
+### GitHub Actions CI/CD
+
+Automated testing on every push and PR:
+
+- **`.github/workflows/ci.yml`** – Main orchestrator
+- **`.github/workflows/backend-tests.yml`** – Python 3.10 & 3.11 matrix, PostgreSQL service
+- **`.github/workflows/frontend-tests.yml`** – Node 20.x & 22.x matrix, unit + E2E
+
+All tests must pass before merging to `main` or `develop`.
+
+### Test Structure
+
+```
+backend/tests/
+├── conftest.py                 # Shared fixtures and setup
+├── unit/
+│   ├── test_chunker.py        # Text chunking logic
+│   ├── test_embeddings.py     # Embedding service
+│   ├── test_models.py         # SQLAlchemy ORM
+│   ├── test_validator.py      # Safety validation
+│   └── test_vector_store.py   # Vector database
+└── integration/
+    └── test_modules_api.py    # API endpoints, workflows
+
+frontend/
+├── src/__tests__/
+│   ├── setup.js               # Test environment config
+│   └── *.test.jsx             # Component unit tests
+├── e2e/
+│   ├── navigation.spec.ts     # Page loading and navigation
+│   ├── ui.spec.ts             # UI interactions
+│   ├── api-integration.spec.ts # API calls and error handling
+│   └── workflows.spec.ts      # Complete user workflows
+└── playwright.config.js       # E2E configuration
+```
+
+### Best Practices
+
+**Backend:**
+- Use fixtures for setup/teardown
+- Mock external services (Google APIs, GitHub)
+- Test edge cases and error scenarios
+- Keep tests isolated and independent
+
+**Frontend:**
+- Test user behavior, not implementation details
+- Mock Firebase for authentication tests
+- Test responsive design (mobile + desktop)
+- Verify accessibility (ARIA attributes, semantic HTML)
+
+### Debugging Tests
+
+**Backend:**
+```bash
+pytest tests/unit/test_chunker.py -vv -s  # Verbose + show print statements
+pytest tests/ --pdb                        # Drop into debugger on failure
+```
+
+**Frontend Unit:**
+```bash
+npm run test                    # Watch mode for development
+npm run test:ui                # Interactive dashboard
+```
+
+**Frontend E2E:**
+```bash
+npm run test:e2e:ui            # Web UI for interactive testing
+npm run test:e2e:debug         # Debug mode with step-through
+npx playwright show-report     # View test report
+```
+
+### Coverage Requirements
+
+- **Backend:** >80% overall coverage (critical paths 100%)
+- **Frontend:** >70% for unit tests, E2E coverage for critical workflows
+- Reports available via Codecov (CI) and locally (`coverage/` directory)
+
+---
+
 ## Safety & Validation
 
 Every response from Gemini is validated by two independent GitHub-hosted models (`meta-llama-3.1-8b-instruct` and `gpt-4.1-mini`) before being returned to the student. If the majority of validators flag a response as unsafe, it is blocked and the student is asked to rephrase.

@@ -29,7 +29,7 @@ npm run test:e2e:ui
 npm run test:e2e:debug
 
 # Run specific test file
-npx playwright test src/__tests__/e2e/navigation.spec.ts
+npx playwright test e2e/navigation.spec.ts
 
 # Run tests with a specific browser
 npx playwright test --project=chromium

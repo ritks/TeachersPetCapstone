@@ -8,9 +8,6 @@ test.describe('UI Rendering', () => {
     // Check that the app container exists
     const app = await page.locator('body');
     await expect(app).toBeVisible();
-
-    // Take a screenshot for visual reference
-    await page.screenshot({ path: 'entry-page.png', fullPage: true });
   });
 
   test('should have responsive layout', async ({ page }) => {
