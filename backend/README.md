@@ -68,17 +68,18 @@ You will be prompted to enter a question. The client will send it to the backend
 
 To evaluate models against the Teacher's Pet test suite, see [Model Testing/MODEL_TESTING_README.md](../Model%20Testing/MODEL_TESTING_README.md) for comprehensive instructions.
 
-The evaluation script supports:
+The evaluation scripts (located in `Model Testing/`) support:
 - **Gemini models** (free and paid tiers)
 - **GitHub Models** (free with Copilot Pro)
 - Multiple rate-limiting strategies
+- Response validation against safety criteria
 - Detailed scoring rubrics for accuracy and safety
 
-Quick reference:
+Quick reference (run from the `Model Testing/` directory):
 ```sh
 # Gemini
-python backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash-lite --provider gemini
+python3 test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash-lite --provider gemini
 
 # GitHub Models (GPT-4o, Llama, Mistral, etc.)
-python backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gpt-4o --provider github --delay 5
+python3 test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gpt-4o --provider github --delay 5
 ```

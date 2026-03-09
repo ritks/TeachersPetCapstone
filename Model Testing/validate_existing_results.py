@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FIXED: Validation script for existing model evaluation results.
+Validation script for existing model evaluation results.
 
 Reads an existing results xlsx file with responses already filled in,
 validates each response using two GitHub models, and adds validation
@@ -9,19 +9,23 @@ columns to the spreadsheet.
 This version properly detects rows where validators returned "error".
 
 Usage:
-    python validate_existing_results_v2.py --input validated_results_gemini-2.5-flash-lite_Engineered-Prompt.xlsx
+    python validate_existing_results.py --input results_gemini-2.5-flash-lite_Engineered-Prompt.xlsx
 """
 
 import argparse
 import os
+import sys
 import time
 from datetime import date
 
 from dotenv import load_dotenv
 import openpyxl
+
+# Add backend to path for rag.validator import
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 from rag.validator import ResponseValidator
 
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 # Sheet names to skip
 SKIP_SHEETS = {"Instructions & Rubric", "Summary Dashboard"}

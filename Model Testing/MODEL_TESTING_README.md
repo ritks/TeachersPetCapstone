@@ -31,10 +31,10 @@ This guide explains how to evaluate AI models (Gemini, GPT-4o, LLama, Mistral, e
 
 ## Running the Evaluation
 
-From the project root:
+From the Model Testing directory:
 
 ```bash
-python3 backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model <model-id> --provider <provider>
+python3 test_model.py --input math_tutor_ai_eval_testcases.xlsx --model <model-id> --provider <provider>
 ```
 
 ### Supported Models & Providers
@@ -74,24 +74,24 @@ python3 backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model 
 
 ```bash
 # Run on paid tier (no delay needed)
-python3 backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash-lite --provider gemini
+python3 test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash-lite --provider gemini
 ```
 
 #### Gemini (Free Tier with Rate Limiting)
 
 ```bash
 # Free tier: 10 RPM = 6s delay minimum
-python3 backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash --provider gemini --delay 6
+python3 test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash --provider gemini --delay 6
 ```
 
 #### GitHub Models (Copilot Pro)
 
 ```bash
 # GPT-4o (recommended for best quality)
-python3 backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gpt-4o --provider github --delay 10
+python3 test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gpt-4o --provider github --delay 10
 
 # Llama 3.1 8B Instruct
-python backend/test_model.py --input math_tutor_ai_eval_testcases.xlsx --model meta-llama-3.1-8b-instruct --provider github --delay 10
+python test_model.py --input math_tutor_ai_eval_testcases.xlsx --model meta-llama-3.1-8b-instruct --provider github --delay 10
 ```
 
 ### Retrying Failed Requests
@@ -100,7 +100,7 @@ If some requests fail (marked with `[ERROR]` in the output file), you can rerun 
 
 ```bash
 # Rerun on the same file - will skip successful responses and only retry errors
-python backend/test_model.py --input results_github_meta-llama-3.1-8b-instruct_2026-02-08.xlsx --model meta-llama-3.1-8b-instruct --provider github --delay 10 --output results_github_meta-llama-3.1-8b-instruct_2026-02-08.xlsx
+python test_model.py --input results_github_meta-llama-3.1-8b-instruct_2026-02-08.xlsx --model meta-llama-3.1-8b-instruct --provider github --delay 10 --output results_github_meta-llama-3.1-8b-instruct_2026-02-08.xlsx
 
 ### Output
 
