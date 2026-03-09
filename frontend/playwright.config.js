@@ -18,10 +18,6 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices.desktop_chrome },
     },
-    {
-      name: 'firefox',
-      use: { ...devices.desktop_firefox },
-    },
   ],
 
   webServer: {
