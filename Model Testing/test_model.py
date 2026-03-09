@@ -8,11 +8,11 @@ column of each sheet. Saves results as a new xlsx for manual scoring.
 
 Usage:
     # Gemini models
-    python test_model.py --input ../math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash-lite --provider gemini
+    python test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gemini-2.5-flash-lite --provider gemini
     
     # GitHub Models
-    python test_model.py --input ../math_tutor_ai_eval_testcases.xlsx --model gpt-4o --provider github
-    python test_model.py --input ../math_tutor_ai_eval_testcases.xlsx --model meta-llama-3.1-405b-instruct --provider github
+    python test_model.py --input math_tutor_ai_eval_testcases.xlsx --model gpt-4o --provider github
+    python test_model.py --input math_tutor_ai_eval_testcases.xlsx --model meta-llama-3.1-405b-instruct --provider github
 """
 
 import argparse
