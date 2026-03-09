@@ -9,3 +9,8 @@ chromadb
 requests
 openpyxl
 httpx
+
+# Testing
+pytest
+pytest-cov
+pytest-asyncio
