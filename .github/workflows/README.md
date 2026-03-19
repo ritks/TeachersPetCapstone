@@ -2,99 +2,169 @@
 
 This directory contains GitHub Actions workflow configurations for continuous integration and deployment of the TeachersPet project.
 
+## Architecture Overview
+
+The CI/CD pipeline uses a **centralized orchestration model**:
+
+```
+Push/PR to main
+       ↓
+   ci.yml (orchestrator)
+       ↓
+   status-check
+       ↓
+   ┌───────────────────┐
+   ↓                   ↓
+backend-tests.yml  frontend-tests.yml
+   ↓                   ↓
+   └───────────────────┘
+            ↓
+     integration-check
+```
+
+- **ci.yml** is the only workflow triggered by git events
+- **backend-tests.yml** and **frontend-tests.yml** are reusable workflows called via `workflow_call`
+- Tests run in parallel, then integration-check verifies completion
+- Single Python 3.11 and Node 20.x version (no matrix testing)
+
 ## Workflows
 
 ### 1. `ci.yml` (Main CI Pipeline)
 The primary workflow that orchestrates all tests and checks.
 
 **Triggers:**
-- Push to `main` or `develop` branches
-- Pull requests to `main` or `develop` branches
-- Daily schedule at 2 AM UTC
+- Push to `main` branch
+- Pull requests to `main` branch
 
 **Jobs:**
 - **status-check**: Validates repository structure and required files
-- **backend-tests**: Runs backend Python tests (via remote workflow call)
-- **frontend-tests**: Runs frontend unit and E2E tests (via remote workflow call)
-- **integration-check**: Final verification that all tests passed
+- **backend-tests**: Runs backend Python tests (via workflow_call)
+- **frontend-tests**: Runs frontend unit and E2E tests (via workflow_call)
+- **integration-check**: Final verification after all tests complete
+
+**Workflow:**
+1. status-check validates project structure
+2. backend-tests and frontend-tests run in parallel
+3. integration-check downloads artifacts and confirms success
 
 ### 2. `backend-tests.yml`
 Comprehensive backend testing workflow for Python code.
 
 **Triggers:**
-- Push to `main` or `develop` with changes in `backend/` directory
-- Pull requests with changes in `backend/` directory
+- Called by ci.yml via `workflow_call` (does not run independently)
 
-**Strategy:**
-- Tests on Python 3.10 and 3.11
-- PostgreSQL service for database tests
-- Parallel matrix execution
+**Configuration:**
+- Python 3.11
+- PostgreSQL 15 service for database tests
+- Working directory: `./backend`
 
 **Steps:**
 1. Checkout code
-2. Set up Python with cached pip dependencies
-3. Install project dependencies
+2. Set up Python 3.11 with cached pip dependencies
+3. Install project dependencies and pytest packages
 4. Run linter (pylint) - non-blocking
-5. Run pytest with coverage reporting
+5. Run pytest with coverage reporting (XML + HTML)
 6. Upload coverage to Codecov
-7. Archive test results
+7. Archive test results (.pytest_cache)
+
+**Environment Variables:**
+- `DATABASE_URL`: PostgreSQL connection string
+- `GEMINI_API_KEY`: Mock API key for CI testing
+- `GITHUB_TOKEN`: Mock token for CI testing
 
 **Artifacts:**
-- `pytest-results-{python-version}`: Test cache and results
+- `pytest-results`: Test cache and results (30 days retention)
 - Coverage reports sent to Codecov
 
 ### 3. `frontend-tests.yml`
 Frontend testing workflow for JavaScript/React code.
 
 **Triggers:**
-- Push to `main` or `develop` with changes in `frontend/` directory
-- Pull requests with changes in `frontend/` directory
+- Called by ci.yml via `workflow_call` (does not run independently)
+
+**Configuration:**
+- Node.js 20.x
+- Working directory: `./frontend`
 
 **Jobs:**
 
 #### Unit Tests
-- **Strategy**: Tests on Node 20.x and 22.x
-- **Steps**:
-  1. Checkout code
-  2. Set up Node.js with cached npm dependencies
-  3. Install dependencies (with legacy peer deps)
-  4. Run ESLint (non-blocking)
-  5. Run Vitest with coverage
-  6. Upload coverage to Codecov
-  7. Archive coverage results
+Runs Vitest tests with coverage reporting.
+
+**Steps:**
+1. Checkout code
+2. Set up Node.js 20 with cached npm dependencies
+3. Install dependencies with `--legacy-peer-deps`
+4. Run ESLint (non-blocking)
+5. Run Vitest with coverage
+6. Upload coverage to Codecov
+7. Archive coverage results
+
+**Artifacts:**
+- `coverage-frontend`: Coverage reports (30 days retention)
 
 #### E2E Tests
-- **Strategy**: Tests on Node 20.x (after unit tests)
-- **Steps**:
-  1. Checkout code
-  2. Set up Node.js with cached npm dependencies
-  3. Install dependencies
-  4. Install Playwright browsers
-  5. Run Playwright tests with 30-second timeout
-  6. Upload Playwright-generated HTML report
-  7. Archive test results
+Runs Playwright end-to-end tests in Chromium.
+
+**Steps:**
+1. Checkout code
+2. Set up Node.js 20 with cached npm dependencies
+3. Install dependencies
+4. Install Playwright browsers and system dependencies
+5. Run Playwright tests with 30-second timeout
+6. Upload Playwright HTML report
+7. Archive test results
+
+**Environment Variables (Mock Firebase):**
+- `CI=true`
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+
+**Note:** E2E tests run with `continue-on-error: true` due to mock Firebase credentials.
+
+**Artifacts:**
+- `playwright-report`: HTML test report (30 days retention)
+- `e2e-test-results`: Test results and traces (30 days retention)
 
 ## GitHub Actions Features
 
+### Workflow Orchestration
+- **ci.yml** acts as the orchestrator
+- **backend-tests.yml** and **frontend-tests.yml** are reusable workflows
+- Tests run only once per push (no duplicate triggers)
+
 ### Caching
-- **pip** cache for Python dependencies
-- **npm** cache for Node.js dependencies
-- Significantly speeds up workflow execution
+- **pip** cache for Python dependencies (speeds up backend tests)
+- **npm** cache for Node.js dependencies (speeds up frontend tests)
+- Significantly reduces workflow execution time
 
 ### Artifacts
 Artifacts are retained for 30 days:
-- Backend pytest results
-- Frontend coverage reports
-- Playwright test reports and results
+- `pytest-results`: Backend test cache
+- `coverage-frontend`: Frontend coverage reports
+- `playwright-report`: E2E test HTML reports
+- `e2e-test-results`: E2E test results and traces
 
-### Secrets & Environment Variables
-Currently set in CI environment:
-- `CI=true` for E2E tests (enables single worker mode)
+### Environment Variables
 
-### Concurrency
-- Matrix strategy for parallel testing
-- Different Python/Node versions tested simultaneously
-- Separate unit and E2E test jobs for frontend
+**Backend:**
+- `DATABASE_URL`: PostgreSQL connection (service container)
+- `GEMINI_API_KEY`: Mock API key (`mock-gemini-api-key-for-ci-testing`)
+- `GITHUB_TOKEN`: Mock token (`mock-github-token-for-ci-testing`)
+
+**Frontend E2E:**
+- `CI=true`: Enables single-worker mode for Playwright
+- Mock Firebase configuration (all `VITE_FIREBASE_*` keys with test values)
+
+### Test Configuration
+- **Backend**: 83 tests with pytest and PostgreSQL
+- **Frontend Unit**: 5 tests with Vitest
+- **Frontend E2E**: 26 Chromium tests with Playwright
+- **Total**: 114 tests
 
 ## Security
 
@@ -104,9 +174,9 @@ Currently set in CI environment:
 - Safe for untrusted contributors
 
 ### Dependencies
-- Using pinned GitHub Actions versions (@v3, @v4)
-- Official actions from GitHub and codecov
-- Regular dependency updates via Dependabot
+- Using pinned GitHub Actions versions (@v4 for most actions)
+- Official actions from GitHub, Codecov, and Playwright
+- `python-multipart` required for FastAPI file upload endpoints
 
 ## Coverage Reports
 
@@ -151,15 +221,32 @@ To reproduce CI environment locally:
 **Backend:**
 ```bash
 cd backend
-python -m pytest tests/ -v
+# Set mock environment variables
+export GEMINI_API_KEY=mock-gemini-api-key-for-ci-testing
+export GITHUB_TOKEN=mock-github-token-for-ci-testing
+# Run tests with coverage
+python -m pytest tests/ -v --cov=. --cov-report=xml --cov-report=html
 ```
 
-**Frontend:**
+**Frontend Unit Tests:**
 ```bash
 cd frontend
 npm install --legacy-peer-deps
-npm run test -- --run
-npm run test:e2e
+npm run test -- --run --coverage
+```
+
+**Frontend E2E Tests:**
+```bash
+cd frontend
+# Set mock Firebase environment variables
+export VITE_FIREBASE_API_KEY=mock-api-key-for-ci
+export VITE_FIREBASE_AUTH_DOMAIN=mock-project.firebaseapp.com
+export VITE_FIREBASE_PROJECT_ID=mock-project
+export VITE_FIREBASE_STORAGE_BUCKET=mock-project.appspot.com
+export VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
+export VITE_FIREBASE_APP_ID=1:123456789:web:abc123def456
+# Run E2E tests
+npm run test:e2e -- --timeout=30000
 ```
 
 ## Customization
@@ -168,22 +255,30 @@ npm run test:e2e
 1. Create `.github/workflows/new-workflow.yml`
 2. Define triggers and jobs
 3. Test in a feature branch
-4. Merge to apply changes
+4. Merge to main to apply changes
 
 ### Modifying test commands
 Update the `run:` sections in respective workflows:
-- Backend: `pytest` command with flags
-- Frontend: `npm run` commands
+- **Backend** (backend-tests.yml): Modify pytest command flags
+- **Frontend Unit** (frontend-tests.yml, unit-tests job): Modify Vitest command
+- **Frontend E2E** (frontend-tests.yml, e2e-tests job): Modify Playwright command
 
 ### Changing triggers
-Modify the `on:` section:
+Modify the `on:` section in ci.yml:
 ```yaml
 on:
   push:
-    branches: [main, develop, staging]
+    branches: [main, staging]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
 ```
+
+**Note:** backend-tests.yml and frontend-tests.yml only trigger via `workflow_call` from ci.yml.
+
+### Changing Python or Node versions
+Update version numbers in workflow files:
+- **Backend**: Edit `python-version: '3.11'` in backend-tests.yml
+- **Frontend**: Edit `node-version: '20.x'` in frontend-tests.yml (appears twice: unit and E2E jobs)
 
 ### Adding approval requirements
 Configure GitHub branch protection rules:
@@ -195,39 +290,54 @@ Configure GitHub branch protection rules:
 ## Monitoring
 
 ### Workflow Status
-- Green checkmark: All tests passed
-- Red X: At least one test failed
-- Yellow dot: Workflow running
-- Skipped: Trigger conditions not met
+View status in GitHub Actions tab:
+- **Green checkmark**: All tests passed
+- **Red X**: At least one test failed
+- **Yellow dot**: Workflow running
+- **Gray circle**: Skipped (no changes triggering workflow)
 
-### Badge
-Add CI status badge to README:
-```markdown
-![CI Status](https://github.com/hamzah/TeachersPetCapstone/workflows/CI/badge.svg)
-```
+### Workflow Execution
+- **ci.yml** runs on every push/PR to main
+- Orchestrates backend-tests.yml and frontend-tests.yml
+- Both test suites run in parallel after status-check
+- integration-check runs after both complete
 
-### Notifications
-Configure GitHub notifications:
-1. Watch the repository
-2. Get notified of workflow runs
-3. Check email for failure notifications
+### Artifacts
+Download artifacts from the Actions tab:
+- Coverage reports
+- Test results
+- Playwright HTML reports
+- Available for 30 days after workflow run
 
 ## Troubleshooting
 
 ### Workflow not triggering
-- Check branch is `main` or `develop`
-- Verify path filters match changed files
-- Check workflow syntax with `yamllint`
+- Check push is to `main` branch
+- Verify workflow YAML syntax is valid (use `yamllint`)
+- Check GitHub Actions is enabled for the repository
+- For reusable workflows (backend/frontend-tests.yml), ensure ci.yml is calling them
 
 ### Dependency conflicts
 - Use `--legacy-peer-deps` for npm (already configured)
-- Pin versions in requirements files
-- Use matrix strategies for multiple versions
+- Pin versions in requirements.txt and package.json
+- Check for python-multipart in backend requirements
 
 ### Timeout issues
-- Increase timeout in workflow (currently 30s for E2E)
-- Check for hanging processes
-- Verify network connectivity in tests
+- Default E2E timeout is 30 seconds (configured in workflow)
+- Increase timeout if needed: `npm run test:e2e -- --timeout=60000`
+- Check for hanging processes or network issues
+- Review test logs for slow operations
+
+### E2E tests failing
+- E2E tests run with `continue-on-error: true` due to mock Firebase
+- Check mock environment variables are set correctly
+- Verify Playwright browsers are installed: `npx playwright install --with-deps`
+- Run locally with same mock env vars to reproduce
+
+### PostgreSQL connection errors (Backend)
+- CI uses PostgreSQL 15 service container
+- Local tests fall back to SQLite if PostgreSQL unavailable
+- Check `DATABASE_URL` environment variable in CI logs
 
 ## Resources
 
