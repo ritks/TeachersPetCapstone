@@ -9,6 +9,58 @@ export function getSpeechSynthesis() {
 }
 
 /**
+ * Pick the most natural-sounding English voice available.
+ * Browsers ship a mix of old robotic voices (e.g. "Microsoft David")
+ * and modern neural ones (e.g. "Microsoft Aria Online (Natural)",
+ * "Google US English"). We rank by keywords that indicate quality.
+ */
+export function pickBestVoice(voices) {
+  if (!voices || voices.length === 0) return null
+
+  const english = voices.filter((v) => /^en(-|_|$)/i.test(v.lang))
+  const pool = english.length > 0 ? english : voices
+
+  const rank = (v) => {
+    const name = (v.name || '').toLowerCase()
+    let score = 0
+    if (/natural/.test(name)) score += 100
+    if (/neural/.test(name)) score += 100
+    if (/online/.test(name)) score += 50
+    if (/enhanced|premium/.test(name)) score += 40
+    if (/google/.test(name)) score += 30
+    if (/aria|jenny|guy|ava|samantha|nova/.test(name)) score += 20
+    if (/en-us/i.test(v.lang)) score += 10
+    // Penalize the old Microsoft SAPI voices
+    if (/david|mark|zira|hazel/.test(name) && !/online/.test(name)) score -= 30
+    return score
+  }
+
+  return [...pool].sort((a, b) => rank(b) - rank(a))[0] || null
+}
+
+/**
+ * Resolve voices now, or wait for the `voiceschanged` event if the
+ * browser hasn't loaded them yet (Chrome returns [] on first call).
+ */
+export function loadVoices(synth) {
+  if (!synth) return Promise.resolve([])
+  const existing = synth.getVoices()
+  if (existing && existing.length > 0) return Promise.resolve(existing)
+  return new Promise((resolve) => {
+    const handler = () => {
+      synth.removeEventListener('voiceschanged', handler)
+      resolve(synth.getVoices() || [])
+    }
+    synth.addEventListener('voiceschanged', handler)
+    // Safety timeout — resolve with whatever's there after 1s
+    setTimeout(() => {
+      synth.removeEventListener('voiceschanged', handler)
+      resolve(synth.getVoices() || [])
+    }, 1000)
+  })
+}
+
+/**
  * Strip markdown and LaTeX syntax from a tutor response so the
  * text-to-speech engine reads the actual content instead of symbols
  * like "asterisk asterisk" or "dollar sign".

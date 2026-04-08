@@ -17,7 +17,7 @@ import EntryPage from './components/EntryPage'
 import TeacherLoginPage from './components/TeacherLoginPage'
 import StudentEntryPage from './components/StudentEntryPage'
 import AnalyticsDashboard from './components/AnalyticsDashboard'
-import { getSpeechSynthesis, stripForSpeech } from './lib/speech'
+import { getSpeechSynthesis, stripForSpeech, pickBestVoice, loadVoices } from './lib/speech'
 
 const WELCOME_MESSAGE = {
   role: 'tutor',
@@ -1178,9 +1178,17 @@ export function Bubble({ message }) {
   const [ttsSupported, setTtsSupported] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const utteranceRef = useRef(null)
+  const voiceRef = useRef(null)
 
   useEffect(() => {
-    setTtsSupported(!!getSpeechSynthesis())
+    const synth = getSpeechSynthesis()
+    setTtsSupported(!!synth)
+    if (!synth) return
+    let cancelled = false
+    loadVoices(synth).then((voices) => {
+      if (!cancelled) voiceRef.current = pickBestVoice(voices)
+    })
+    return () => { cancelled = true }
   }, [])
 
   // Cancel any in-flight speech if this bubble unmounts (e.g. nav away)
@@ -1211,7 +1219,11 @@ export function Bubble({ message }) {
     if (!clean) return
 
     const utterance = new window.SpeechSynthesisUtterance(clean)
-    utterance.rate = 1
+    if (voiceRef.current) {
+      utterance.voice = voiceRef.current
+      utterance.lang = voiceRef.current.lang
+    }
+    utterance.rate = 1.15
     utterance.pitch = 1
     utterance.onend = () => {
       setSpeaking(false)
