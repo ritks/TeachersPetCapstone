@@ -10,7 +10,7 @@ An AI-powered math tutoring assistant for K–8 students. Teachers manage module
 |-------|-----------|
 | Frontend | React 19, Vite, Tailwind CSS |
 | Backend | FastAPI, SQLAlchemy, SQLite |
-| AI | Google Gemini 2.5 Flash Lite (tutor), GitHub Models — Llama + GPT-4.1-mini (safety validator) |
+| AI | Google Gemini (tutor + safety validator) |
 | Auth & Database | Firebase Authentication + Firestore |
 | Document RAG | PyMuPDF, ChromaDB, Gemini Embeddings |
 
@@ -23,7 +23,7 @@ TeachersPetCapstone/
 ├── backend/
 │   ├── main.py                  # FastAPI server
 │   ├── requirements.txt         # Python dependencies
-│   ├── .env                     # GEMINI_API_KEY, GITHUB_TOKEN (git-ignored)
+│   ├── .env                     # GEMINI_API_KEY (git-ignored)
 │   ├── database/
 │   │   ├── db.py                # SQLAlchemy engine + session
 │   │   └── models.py            # Module, Document ORM models
@@ -33,7 +33,7 @@ TeachersPetCapstone/
 │       ├── vector_store.py      # ChromaDB wrapper
 │       ├── retriever.py         # RAG context builder
 │       ├── document_processor.py# PDF/text ingestion pipeline
-│       └── validator.py         # 2-model safety validator (GitHub Models)
+│       └── validator.py         # Gemini-based safety validator
 ├── frontend/
 │   ├── src/
 │   │   ├── firebase.js          # Firebase app init (auth, db, googleProvider)
@@ -59,7 +59,6 @@ TeachersPetCapstone/
 - Node.js 18+ and npm
 - A Firebase project (free)
 - A Google Gemini API key — https://aistudio.google.com/app/apikeys
-- A GitHub Personal Access Token with the **Models** permission — https://github.com/settings/tokens
 
 ---
 
@@ -148,7 +147,6 @@ VITE_FIREBASE_APP_ID=...
 
 ```
 GEMINI_API_KEY=...
-GITHUB_TOKEN=...
 ```
 
 Both files are git-ignored.
@@ -373,6 +371,6 @@ npx playwright show-report     # View test report
 
 ## Safety & Validation
 
-Every response from Gemini is validated by two independent GitHub-hosted models (`meta-llama-3.1-8b-instruct` and `gpt-4.1-mini`) before being returned to the student. If the majority of validators flag a response as unsafe, it is blocked and the student is asked to rephrase.
+Every response from Gemini is validated by a Gemini safety-validation call before being returned to the student. If validation flags a response as unsafe, it is blocked and the student is asked to rephrase.
 
-This is configured in `backend/rag/validator.py` and requires a valid `GITHUB_TOKEN` in `backend/.env`.
+This is configured in `backend/rag/validator.py` and uses the same `GEMINI_API_KEY` configured in `backend/.env`.
