@@ -1225,10 +1225,86 @@ function TypingIndicator() {
 }
 
 /* ── InputBar ────────────────────────────────────────────────── */
+function getSpeechRecognitionCtor() {
+  if (typeof window === 'undefined') return null
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null
+}
+
 function InputBar({ value, onChange, onSubmit, disabled }) {
+  const [listening, setListening] = useState(false)
+  const [speechSupported, setSpeechSupported] = useState(false)
+  const recognitionRef = useRef(null)
+  const prefixRef = useRef('')
+
+  useEffect(() => {
+    setSpeechSupported(!!getSpeechRecognitionCtor())
+  }, [])
+
+  useEffect(() => {
+    const SpeechRecognition = getSpeechRecognitionCtor()
+    if (!SpeechRecognition) return undefined
+
+    const recognition = new SpeechRecognition()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
+
+    recognition.onresult = (event) => {
+      const parts = []
+      for (let i = 0; i < event.results.length; i += 1) {
+        const t = event.results[i][0]?.transcript?.trim()
+        if (t) parts.push(t)
+      }
+      const speech = parts.join(' ')
+      const prefix = prefixRef.current.trimEnd()
+      const combined =
+        prefix && speech ? `${prefix} ${speech}` : (prefix || speech)
+      onChange(combined)
+    }
+
+    recognition.onerror = (event) => {
+      if (event.error === 'aborted') return
+      setListening(false)
+    }
+
+    recognition.onend = () => {
+      setListening(false)
+    }
+
+    recognitionRef.current = recognition
+    return () => {
+      recognition.abort()
+      recognitionRef.current = null
+    }
+  }, [onChange])
+
+  const toggleListen = () => {
+    const rec = recognitionRef.current
+    if (!rec || disabled) return
+
+    if (listening) {
+      try {
+        rec.stop()
+      } catch {
+        /* already stopped */
+      }
+      setListening(false)
+      return
+    }
+
+    prefixRef.current = value
+    try {
+      rec.start()
+      setListening(true)
+    } catch {
+      /* start() throws if already running */
+      setListening(true)
+    }
+  }
+
   return (
     <div className="border-t border-gray-200 bg-white/80 backdrop-blur-sm px-4 py-4">
-      <form onSubmit={onSubmit} className="max-w-2xl mx-auto flex gap-2">
+      <form onSubmit={onSubmit} className="max-w-2xl mx-auto flex gap-2 items-center">
         <input
           type="text"
           value={value}
@@ -1237,6 +1313,35 @@ function InputBar({ value, onChange, onSubmit, disabled }) {
           disabled={disabled}
           className="flex-1 rounded-full border border-gray-300 bg-white px-5 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent disabled:opacity-50 transition-all"
         />
+        {speechSupported && (
+          <button
+            type="button"
+            onClick={toggleListen}
+            disabled={disabled}
+            title={listening ? 'Stop dictation' : 'Speak your question (microphone)'}
+            aria-pressed={listening}
+            aria-label={listening ? 'Stop voice input' : 'Start voice input'}
+            className={[
+              'flex-shrink-0 rounded-full p-2.5 border transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+              listening
+                ? 'border-red-300 bg-red-50 text-red-600 hover:bg-red-100'
+                : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50',
+            ].join(' ')}
+          >
+            {listening ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            )}
+          </button>
+        )}
         <button
           type="submit"
           disabled={disabled || !value.trim()}
