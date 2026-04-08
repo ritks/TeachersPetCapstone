@@ -46,7 +46,7 @@ document_processor = DocumentProcessor(embedding_service, vector_store)
 
 # ── Response validator (required) ──────────────────────────────────────────────
 try:
-    validator = ResponseValidator()
+    validator = ResponseValidator(client=client)
     print("[INFO] Response validation ENABLED")
 except ValueError as e:
     print(f"[ERROR] Response validation failed to initialize: {e}")

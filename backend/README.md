@@ -1,15 +1,13 @@
 ## TeachersPetCapstone Backend
 
-This backend provides a simple API endpoint for answering math questions using LLM models. It is built with FastAPI and supports multiple model providers:
+This backend provides API endpoints for answering math questions using Gemini. It is built with FastAPI.
 
 - **Google Gemini** (via `google-genai` SDK)
-- **GitHub Models** (free access to GPT-4o, Llama, Mistral, and more)
 
 ### Prerequisites
 
 - Python 3.9+
 - **For Gemini:** A Google Gemini API key ([get one here](https://aistudio.google.com/app/apikey))
-- **For GitHub Models:** A GitHub Personal Access Token with the `models` scope
 
 ### Setup
 
@@ -32,12 +30,6 @@ This backend provides a simple API endpoint for answering math questions using L
 **Google Gemini API Key:**
 - Go to https://aistudio.google.com/app/apikey
 - Click "Create API key"
-- Copy and paste into `.env`
-
-**GitHub Personal Access Token:**
-- Go to https://github.com/settings/tokens
-- Click "Generate new token (classic)"
-- Select the `read:packages` scope (minimum required)
 - Copy and paste into `.env`
 
 ### Running the Backend

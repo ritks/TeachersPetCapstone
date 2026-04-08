@@ -1,105 +1,78 @@
 #!/usr/bin/env python3
-"""
-Response validator using two GitHub-hosted models to ensure Gemini responses
-are mathematically appropriate and safe for K-8 students.
-"""
+"""Response validator powered by Gemini models only."""
 
 import os
 from typing import Optional
-import requests
+
+from google import genai
+from google.genai import types
 
 
 class ResponseValidator:
-    """Validates LLM responses using GitHub-hosted models."""
-    
-    ENDPOINT = "https://models.inference.ai.azure.com/chat/completions"
-    DEFAULT_VALIDATORS = [
-        "meta-llama-3.1-8b-instruct",
-        "gpt-4.1-mini"
-    ]
-    
-    def __init__(self, github_token: Optional[str] = None):
-        """Initialize validator with GitHub token."""
-        self.token = github_token or os.getenv("GITHUB_TOKEN")
-        if not self.token:
-            raise ValueError("GITHUB_TOKEN environment variable not set")
-    
+    """Validates tutor responses using Gemini models."""
+
+    DEFAULT_VALIDATORS = ["gemini-2.5-flash-lite"]
+
+    def __init__(self, client: Optional[genai.Client] = None, api_key: Optional[str] = None):
+        """Initialize validator with a shared Gemini client or API key."""
+        if client is not None:
+            self.client = client
+            return
+
+        key = api_key or os.getenv("GEMINI_API_KEY")
+        if not key:
+            raise ValueError("GEMINI_API_KEY environment variable not set")
+        self.client = genai.Client(api_key=key)
+
     def validate(
         self,
         question: str,
         response: str,
-        validators: list = None,
-        timeout: int = 60
+        validators: Optional[list] = None,
+        timeout: int = 60,
     ) -> dict:
-        """
-        Validate a response using two GitHub models.
-        
-        Args:
-            question: The original student question
-            response: The Gemini response to validate
-            validators: List of model IDs to use (default: gpt-4o-mini, llama-70b)
-            timeout: Request timeout in seconds
-        
-        Returns:
-            {
-                "is_safe": bool,  # True if BOTH validators say safe
-                "safety_votes": {"model_id": "safe"|"unsafe"},
-                "is_correct": bool,  # True if validators agree response is correct
-                "explanation": str,  # Combined feedback from validators
-                "errors": list  # Any validation errors that occurred
-            }
-        """
-        if validators is None:
-            validators = self.DEFAULT_VALIDATORS
-        
+        """Validate a tutor response for K-8 safety."""
+        validator_models = validators or self.DEFAULT_VALIDATORS
+
         safety_votes = {}
-        explanations = []
         errors = []
-        
-        for model in validators:
+
+        for model in validator_models:
             try:
                 assessment = self._query_validator(
-                    model,
-                    question,
-                    response,
-                    timeout
+                    model=model,
+                    question=question,
+                    response=response,
+                    timeout=timeout,
                 )
                 safety_votes[model] = assessment
-                
             except Exception as e:
                 errors.append(f"{model}: {str(e)}")
                 safety_votes[model] = "error"
-        
-        # Consider valid only if both models agree it's safe
+
         safe_votes = sum(1 for v in safety_votes.values() if v == "safe")
         is_safe = safe_votes > len(safety_votes) / 2
-        
-        # Build explanation from votes
+
         explanation = f"Validators: {', '.join([f'{k}={v}' for k, v in safety_votes.items()])}"
         if errors:
             explanation += f". Errors: {'; '.join(errors)}"
-        
+
         return {
             "is_safe": is_safe,
             "safety_votes": safety_votes,
             "explanation": explanation,
-            "errors": errors
+            "errors": errors,
         }
-    
+
     def _query_validator(
         self,
         model: str,
         question: str,
         response: str,
-        timeout: int
+        timeout: int,
     ) -> str:
-        """
-        Query a validator model.
-        
-        Returns:
-            "safe" or "unsafe" string
-        """
-        validation_prompt = f"""You are a SAFETY validator for a K–8 math tutor.
+        """Query a Gemini validator model and return safe/unsafe."""
+        validation_prompt = f"""You are a SAFETY validator for a K-8 math tutor.
 
 STUDENT QUESTION:
 {question}
@@ -107,13 +80,13 @@ STUDENT QUESTION:
 TUTOR RESPONSE:
 {response}
 
-Your task: Assess if this response is appropriate and safe for a K–8 student (kindergarten through 8th grade).
+Your task: Assess if this response is appropriate and safe for a K-8 student (kindergarten through 8th grade).
 
 Consider:
 1. Are there any harmful, dangerous, or clearly inappropriate elements?
 2. Does it include violence, self-harm, crime, drugs, or weapons?
 3. Does it contain hate, harassment, bullying, or explicit sexual content?
-4. Is the tone clearly inappropriate for K–8 students?
+4. Is the tone clearly inappropriate for K-8 students?
 
 IMPORTANT:
 - Do NOT mark "unsafe" just because the math is incorrect, incomplete, or off-topic.
@@ -121,38 +94,21 @@ IMPORTANT:
 - Non-math but harmless responses should still be considered "safe".
 
 RESPOND WITH ONLY:
-"safe" - if it is appropriate for a K–8 student, even if imperfect or off-topic
+"safe" - if it is appropriate for a K-8 student, even if imperfect or off-topic
 "unsafe" - only if it includes harmful, dangerous, or clearly inappropriate content"""
 
-        response = requests.post(
-            self.ENDPOINT,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.token}",
-                "User-Agent": "TeachersPet/1.0"
-            },
-            json={
-                "model": model,
-                "messages": [
-                    {"role": "user", "content": validation_prompt}
-                ],
-                "temperature": 0.3,  # Low temperature for consistent answers
-                "max_tokens": 10  # Only need "safe" or "unsafe"
-            },
-            timeout=timeout
+        result = self.client.models.generate_content(
+            model=model,
+            contents=validation_prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.0,
+                max_output_tokens=8,
+            ),
         )
-        
-        if response.status_code != 200:
-            raise Exception(
-                f"API error {response.status_code}: {response.text}"
-            )
-        
-        result = response.json()["choices"][0]["message"]["content"].strip().lower()
-        
-        # Extract "safe" or "unsafe" from response
-        if "unsafe" in result:
+
+        text = (result.text or "").strip().lower()
+        if "unsafe" in text:
             return "unsafe"
-        elif "safe" in result:
+        if "safe" in text:
             return "safe"
-        else:
-            raise Exception(f"Unexpected response: {result}")
+        raise Exception(f"Unexpected response: {text}")
