@@ -17,6 +17,7 @@ import EntryPage from './components/EntryPage'
 import TeacherLoginPage from './components/TeacherLoginPage'
 import StudentEntryPage from './components/StudentEntryPage'
 import AnalyticsDashboard from './components/AnalyticsDashboard'
+import { getSpeechSynthesis, stripForSpeech } from './lib/speech'
 
 const WELCOME_MESSAGE = {
   role: 'tutor',
@@ -1171,8 +1172,59 @@ function StudentHeader({ moduleName, courseCode, onLogout }) {
 }
 
 /* ── Bubble ──────────────────────────────────────────────────── */
-function Bubble({ message }) {
+export function Bubble({ message }) {
   const isStudent = message.role === 'student'
+  const canSpeak = !isStudent && !message.isError
+  const [ttsSupported, setTtsSupported] = useState(false)
+  const [speaking, setSpeaking] = useState(false)
+  const utteranceRef = useRef(null)
+
+  useEffect(() => {
+    setTtsSupported(!!getSpeechSynthesis())
+  }, [])
+
+  // Cancel any in-flight speech if this bubble unmounts (e.g. nav away)
+  useEffect(() => {
+    return () => {
+      const synth = getSpeechSynthesis()
+      if (synth && utteranceRef.current) {
+        synth.cancel()
+      }
+    }
+  }, [])
+
+  const handleToggleSpeak = () => {
+    const synth = getSpeechSynthesis()
+    if (!synth) return
+
+    if (speaking) {
+      synth.cancel()
+      setSpeaking(false)
+      utteranceRef.current = null
+      return
+    }
+
+    // Stop anything else that might be speaking first
+    synth.cancel()
+
+    const clean = stripForSpeech(message.content)
+    if (!clean) return
+
+    const utterance = new window.SpeechSynthesisUtterance(clean)
+    utterance.rate = 1
+    utterance.pitch = 1
+    utterance.onend = () => {
+      setSpeaking(false)
+      utteranceRef.current = null
+    }
+    utterance.onerror = () => {
+      setSpeaking(false)
+      utteranceRef.current = null
+    }
+    utteranceRef.current = utterance
+    setSpeaking(true)
+    synth.speak(utterance)
+  }
 
   return (
     <div className={`flex items-end gap-2 ${isStudent ? 'flex-row-reverse' : ''}`}>
@@ -1202,6 +1254,32 @@ function Bubble({ message }) {
           </ReactMarkdown>
         )}
       </div>
+
+      {canSpeak && ttsSupported && (
+        <button
+          type="button"
+          onClick={handleToggleSpeak}
+          title={speaking ? 'Stop reading' : 'Read aloud'}
+          aria-pressed={speaking}
+          aria-label={speaking ? 'Stop reading tutor message' : 'Read tutor message aloud'}
+          className={[
+            'flex-shrink-0 self-end mb-1 rounded-full p-1.5 border transition-colors',
+            speaking
+              ? 'border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+              : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-indigo-600',
+          ].join(' ')}
+        >
+          {speaking ? (
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M6 6h12v12H6z" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+            </svg>
+          )}
+        </button>
+      )}
     </div>
   )
 }
