@@ -18,6 +18,39 @@ import TeacherLoginPage from './components/TeacherLoginPage'
 import StudentEntryPage from './components/StudentEntryPage'
 import AnalyticsDashboard from './components/AnalyticsDashboard'
 
+const NAV_STATE_KEY = 'tpNav'
+
+const APP_VIEWS = {
+  ENTRY: 'entry',
+  TEACHER_LOGIN: 'teacher-login',
+  STUDENT_ENTRY: 'student-entry',
+  TEACHER: 'teacher',
+  STUDENT: 'student',
+  GUEST: 'guest',
+}
+
+function getAppView({ userType, currentUser, studentData, authLoading }) {
+  if (authLoading) return null
+  if (userType === null) return APP_VIEWS.ENTRY
+  if (userType === 'teacher' && !currentUser) return APP_VIEWS.TEACHER_LOGIN
+  if (userType === 'student' && !studentData) return APP_VIEWS.STUDENT_ENTRY
+  if (userType === 'teacher') return APP_VIEWS.TEACHER
+  if (userType === 'guest') return APP_VIEWS.GUEST
+  return APP_VIEWS.STUDENT
+}
+
+function loadStoredStudent() {
+  const raw = localStorage.getItem('tp_student')
+  if (!raw) return null
+  try {
+    const data = JSON.parse(raw)
+    if (data?.courseCode && data?.moduleId) return data
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
 const WELCOME_MESSAGE = {
   role: 'tutor',
   content:
@@ -141,35 +174,98 @@ async function getUniqueCode() {
 export default function App() {
   const { currentUser, authLoading, logout } = useAuth()
 
-  // null | 'student' | 'teacher'
+  // null | 'student' | 'teacher' | 'guest'
   const [userType, setUserType] = useState(null)
   const [studentData, setStudentData] = useState(null) // { courseCode, moduleId, moduleName, teacherUid }
+  const didInitRef = useRef(false)
+  const handlingPopRef = useRef(false)
+  const lastViewRef = useRef(null)
 
-  // Restore student session from localStorage on mount
+  // One-time app bootstrap
   useEffect(() => {
-    const raw = localStorage.getItem('tp_student')
-    if (raw) {
-      try {
-        const data = JSON.parse(raw)
-        if (data?.courseCode && data?.moduleId) {
-          setStudentData(data)
-          setUserType('student')
-          return
-        }
-      } catch { /* ignore */ }
+    if (authLoading || didInitRef.current) return
+    didInitRef.current = true
+
+    const data = loadStoredStudent()
+    if (data) {
+      setStudentData(data)
+      setUserType('student')
+      return
     }
-    // If Firebase has a logged-in user, go straight to teacher
-    if (!authLoading && currentUser) {
+    if (currentUser) {
       setUserType('teacher')
     }
   }, [authLoading, currentUser])
 
-  // When Firebase resolves a logged-in user (e.g., after page reload)
+  // Browser back/forward support for top-level app screens
   useEffect(() => {
-    if (!authLoading && currentUser && userType === null) {
-      setUserType('teacher')
+    if (typeof window === 'undefined') return undefined
+
+    const onPopState = (event) => {
+      const view = event.state?.[NAV_STATE_KEY]
+      if (!view) return
+
+      if (!Object.values(APP_VIEWS).includes(view)) return
+      handlingPopRef.current = true
+
+      switch (view) {
+        case APP_VIEWS.ENTRY:
+          setUserType(null)
+          break
+        case APP_VIEWS.TEACHER_LOGIN:
+          setUserType('teacher')
+          break
+        case APP_VIEWS.STUDENT_ENTRY:
+          setUserType('student')
+          setStudentData(null)
+          break
+        case APP_VIEWS.TEACHER:
+          setUserType('teacher')
+          break
+        case APP_VIEWS.GUEST:
+          setUserType('guest')
+          break
+        case APP_VIEWS.STUDENT: {
+          const data = loadStoredStudent()
+          setStudentData(data)
+          setUserType('student')
+          break
+        }
+        default:
+          break
+      }
     }
-  }, [authLoading, currentUser, userType])
+
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  const appView = getAppView({ userType, currentUser, studentData, authLoading })
+
+  // Keep browser history in sync with current app screen
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (appView === null || !didInitRef.current) return
+
+    const state = { ...(window.history.state || {}), [NAV_STATE_KEY]: appView }
+
+    if (lastViewRef.current === null) {
+      window.history.replaceState(state, '', window.location.href)
+      lastViewRef.current = appView
+      return
+    }
+
+    if (handlingPopRef.current) {
+      handlingPopRef.current = false
+      lastViewRef.current = appView
+      return
+    }
+
+    if (appView !== lastViewRef.current) {
+      window.history.pushState(state, '', window.location.href)
+      lastViewRef.current = appView
+    }
+  }, [appView])
 
   if (authLoading) return <LoadingSpinner />
 
@@ -240,6 +336,59 @@ function TeacherApp({ currentUser, onLogout }) {
   const [selectedModuleId, setSelectedModuleId] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [documents, setDocuments] = useState([])
+  const handlingPagePopRef = useRef(false)
+  const lastPageRef = useRef(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    const stateView = window.history.state?.[NAV_STATE_KEY]
+    if (stateView === 'teacher-dashboard') {
+      setPage('dashboard')
+      lastPageRef.current = 'dashboard'
+    } else {
+      setPage('chat')
+      window.history.replaceState(
+        { ...(window.history.state || {}), [NAV_STATE_KEY]: 'teacher-chat' },
+        '',
+        window.location.href,
+      )
+      lastPageRef.current = 'chat'
+    }
+
+    const onPopState = (event) => {
+      const view = event.state?.[NAV_STATE_KEY]
+      if (view !== 'teacher-chat' && view !== 'teacher-dashboard') return
+      handlingPagePopRef.current = true
+      setPage(view === 'teacher-dashboard' ? 'dashboard' : 'chat')
+    }
+
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (lastPageRef.current === null) return
+
+    if (handlingPagePopRef.current) {
+      handlingPagePopRef.current = false
+      lastPageRef.current = page
+      return
+    }
+
+    if (page === lastPageRef.current) return
+
+    window.history.pushState(
+      {
+        ...(window.history.state || {}),
+        [NAV_STATE_KEY]: page === 'dashboard' ? 'teacher-dashboard' : 'teacher-chat',
+      },
+      '',
+      window.location.href,
+    )
+    lastPageRef.current = page
+  }, [page])
 
   const refreshDocuments = async (moduleId) => {
     const id = moduleId ?? selectedModuleId
