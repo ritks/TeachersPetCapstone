@@ -297,10 +297,10 @@ npm run test:e2e:debug   # Debug mode
 Automated testing on every push and PR:
 
 - **`.github/workflows/ci.yml`** – Main orchestrator
-- **`.github/workflows/backend-tests.yml`** – Python 3.10 & 3.11 matrix, PostgreSQL service
-- **`.github/workflows/frontend-tests.yml`** – Node 20.x & 22.x matrix, unit + E2E
+- **`.github/workflows/backend-tests.yml`** – Python 3.11, PostgreSQL 15 service
+- **`.github/workflows/frontend-tests.yml`** – Node 20.x, unit + E2E
 
-All tests must pass before merging to `main` or `develop`.
+All tests must pass before merging to `main`.
 
 ### Test Structure
 

@@ -115,36 +115,20 @@ describe('MyComponent', () => {
 })
 ```
 
-### Coverage
+### Coverage and Debugging
 
 Generate coverage reports:
 
 ```bash
 npm run test:coverage
 ```
-
-Opens HTML report in `coverage/`. Target: **70%+ coverage**.
-
-### Debugging
+Opens HTML report in `coverage/`.
 
 **Using Vitest UI**:
 ```bash
 npm run test:ui
 ```
 Opens interactive dashboard with pass/fail status, coverage, and stack traces.
-
-**VS Code Integration**:
-Add to `.vscode/launch.json`:
-```json
-{
-  "type": "node",
-  "request": "launch",
-  "name": "Vitest Debug",
-  "runtimeExecutable": "npm",
-  "runtimeArgs": ["run", "test"],
-  "console": "integratedTerminal"
-}
-```
 
 ### Best Practices
 
@@ -177,14 +161,6 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ user: null, loading: false })
 }))
 ```
-
-### Testing Phases
-
-- ✅ **Phase 1-7**: Complete testing infrastructure and CI/CD pipeline
-  - Backend: 83 unit + integration tests with 84%+ coverage
-  - Frontend: 5 component unit tests
-  - Frontend E2E: 52 Playwright tests across all user workflows
-  - CI/CD: GitHub Actions with Python/Node matrices
 
 For detailed testing documentation, see [Testing](../README.md#testing) in the main README.
 
