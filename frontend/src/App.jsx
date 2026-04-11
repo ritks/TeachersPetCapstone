@@ -851,7 +851,12 @@ function ChatPanel({ selectedModuleId, userType, studentData, sessionKey, initia
       })
       const data = await res.json()
       setSessionId(data.session_id)
-      const finalMessages = [...withQuestion, { role: 'tutor', content: data.answer, isError: data.error }]
+      const finalMessages = [...withQuestion, {
+        role: 'tutor',
+        content: data.answer,
+        isError: data.error,
+        lean4Verification: data.lean4_verification ?? null,
+      }]
       setMessages(finalMessages)
       if (onMessagesUpdate) onMessagesUpdate(finalMessages, data.session_id)
 
@@ -897,7 +902,7 @@ function ChatPanel({ selectedModuleId, userType, studentData, sessionKey, initia
     messages[0].content === WELCOME_MESSAGE.content
 
   return (
-    <>
+    <div className="flex flex-col flex-1 min-h-0">
       <section className="flex-1 overflow-y-auto px-4 py-6">
         {isStudentEmptyState ? (
           <StudentEmptyState greeting={greeting} onQuickAction={handleQuickAction} />
@@ -912,18 +917,20 @@ function ChatPanel({ selectedModuleId, userType, studentData, sessionKey, initia
         )}
       </section>
 
-      <InputBar
-        value={input}
-        onChange={setInput}
-        onSubmit={handleSubmit}
-        disabled={loading}
-      />
-      {userType === 'student' && (
-        <p className="text-center text-xs text-gray-400 pb-2 px-4">
-          All messages and responses are sent directly to course staff for review.
-        </p>
-      )}
-    </>
+      <div className="flex-shrink-0">
+        <InputBar
+          value={input}
+          onChange={setInput}
+          onSubmit={handleSubmit}
+          disabled={loading}
+        />
+        {userType === 'student' && (
+          <p className="text-center text-xs text-gray-400 pb-2 px-4">
+            All messages and responses are sent directly to course staff for review.
+          </p>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -1413,6 +1420,37 @@ export function Bubble({ message }) {
           <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
             {message.content}
           </ReactMarkdown>
+        )}
+
+        {!isStudent && message.lean4Verification && (
+          <div className={`mt-1.5 flex items-center gap-1 text-xs font-medium ${
+            message.lean4Verification.verified === true
+              ? 'text-green-600'
+              : message.lean4Verification.verified === false
+                ? 'text-amber-600'
+                : message.lean4Verification.error
+                  ? 'text-red-500'
+                  : 'text-gray-400'
+          }`}>
+            <span className="inline-block w-2 h-2 rounded-full" style={{
+              backgroundColor: message.lean4Verification.verified === true
+                ? '#16a34a'
+                : message.lean4Verification.verified === false
+                  ? '#d97706'
+                  : message.lean4Verification.error
+                    ? '#ef4444'
+                    : '#9ca3af',
+            }} />
+            {message.lean4Verification.verified === true
+              ? `Verified by Lean4 (${message.lean4Verification.iterations?.length ?? 0} iteration${message.lean4Verification.iterations?.length === 1 ? '' : 's'})`
+              : message.lean4Verification.verified === false
+                ? 'Lean4: unverified after refinement'
+                : message.lean4Verification.error
+                  ? 'Lean4: verification error'
+                  : message.lean4Verification.reason === 'no_verifiable_claim'
+                    ? 'Lean4: no verifiable claim'
+                    : 'Lean4: skipped'}
+          </div>
         )}
       </div>
 

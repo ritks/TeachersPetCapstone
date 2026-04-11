@@ -17,6 +17,7 @@ from rag.vector_store import VectorStore
 from rag.retriever import Retriever
 from rag.document_processor import DocumentProcessor
 from rag.validator import ResponseValidator
+from rag.lean4_verifier import Lean4Verifier
 
 load_dotenv()
 
@@ -51,6 +52,10 @@ try:
 except ValueError as e:
     print(f"[ERROR] Response validation failed to initialize: {e}")
     raise
+
+# ── Lean4 verifier ────────────────────────────────────────────────────
+lean4_verifier = Lean4Verifier(client=client)
+print("[INFO] Lean4 verification ENABLED")
 
 # ── Constants ─────────────────────────────────────────────────────────
 BASE_SYSTEM_PROMPT = (
@@ -88,6 +93,7 @@ class ConversationRequest(BaseModel):
     question: str
     session_id: Optional[str] = None
     module_id: Optional[str] = None  # scope chat to a module via RAG
+    lean4_verify: Optional[bool] = False  # force Lean4 verification (for testing)
 
 
 class ConversationResponse(BaseModel):
@@ -95,6 +101,7 @@ class ConversationResponse(BaseModel):
     session_id: str
     error: Optional[bool] = False
     validation: Optional[dict] = None  # Validation metadata from GitHub models
+    lean4_verification: Optional[dict] = None  # Lean4 formal verification metadata
 
 
 class ModuleCreate(BaseModel):
@@ -210,6 +217,21 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
 
         answer = response.text
 
+        # ---- Lean4 formal verification (optional / heuristic) --------
+        lean4_result = None
+        try:
+            if data.lean4_verify or lean4_verifier.should_verify(question, answer):
+                lean4_result = lean4_verifier.verify_and_refine(
+                    question=question,
+                    answer=answer,
+                    contents=contents,
+                    system_prompt=system_prompt,
+                )
+                answer = lean4_result["final_answer"]
+        except Exception as e:
+            print(f"[ERROR] Lean4 verification failed: {e}")
+            lean4_result = {"error": str(e)}
+
         # ---- Validation with GitHub models (required) ----
         validation_result = None
         try:
@@ -221,6 +243,7 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
                     answer="I'm not able to provide that response. Please rephrase your question.",
                     session_id=session_id,
                     validation=validation_result,
+                    lean4_verification=lean4_result,
                     error=False
                 )
         except Exception as e:
@@ -231,7 +254,12 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
         conversations[session_id].append({"role": "user", "content": question})
         conversations[session_id].append({"role": "assistant", "content": answer})
 
-        return ConversationResponse(answer=answer, session_id=session_id, validation=validation_result)
+        return ConversationResponse(
+            answer=answer,
+            session_id=session_id,
+            validation=validation_result,
+            lean4_verification=lean4_result,
+        )
 
     except HTTPException:
         raise
