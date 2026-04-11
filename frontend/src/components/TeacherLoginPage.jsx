@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { TEACHER_LOGIN_COPY } from '../content/strings'
 import { AppShell, Button, Input, Panel } from './ui/primitives'
+import LogoMark from './common/LogoMark'
 
-export default function TeacherLoginPage({ onSuccess }) {
+export default function TeacherLoginPage({ onSuccess, embedded = false }) {
   const { login, register, loginWithGoogle } = useAuth()
   const [mode, setMode] = useState('signin') // 'signin' | 'register'
   const [email, setEmail] = useState('')
@@ -43,24 +44,23 @@ export default function TeacherLoginPage({ onSuccess }) {
     }
   }
 
-  return (
-    <AppShell className="flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm">
+  const content = (
+    <div className="w-full max-w-sm">
+      {!embedded && (
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-[var(--color-brand-50)] border border-[var(--color-brand-100)] flex items-center justify-center mx-auto mb-3">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-indigo-500" viewBox="0 0 24 24" fill="currentColor">
-              <ellipse cx="5.5" cy="6.5" rx="2.5" ry="3" />
-              <ellipse cx="10" cy="4" rx="2" ry="2.5" />
-              <ellipse cx="14.5" cy="4" rx="2" ry="2.5" />
-              <ellipse cx="18.5" cy="6.5" rx="2" ry="2.5" />
-              <path d="M12 9c-4.418 0-8 2.686-8 6 0 2.21 3.582 4 8 4s8-1.79 8-4c0-3.314-3.582-6-8-6z" />
-            </svg>
-          </div>
+          <LogoMark containerClassName="w-14 h-14 rounded-2xl border border-[var(--color-brand-100)] mx-auto mb-3 p-1" />
           <h2 className="text-2xl font-bold text-gray-800">{TEACHER_LOGIN_COPY.title}</h2>
           <p className="text-gray-400 text-sm mt-1">{TEACHER_LOGIN_COPY.subtitle}</p>
         </div>
+      )}
 
-        <Panel className="p-6">
+      <Panel className={embedded ? 'p-5 bg-white/92 backdrop-blur-sm border-indigo-100 shadow-[0_14px_32px_rgba(27,38,59,0.12)]' : 'p-6'}>
+          {embedded && (
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">{TEACHER_LOGIN_COPY.title}</h3>
+              <p className="text-sm text-gray-500 mt-1">{TEACHER_LOGIN_COPY.subtitle}</p>
+            </div>
+          )}
           {/* mode toggle */}
           <div className="flex rounded-lg bg-gray-100 p-1 mb-5">
             <button
@@ -139,7 +139,7 @@ export default function TeacherLoginPage({ onSuccess }) {
             disabled={loading}
             variant="secondary"
             size="lg"
-            className="w-full flex items-center justify-center gap-2"
+            className="w-full flex items-center justify-center gap-2 bg-white"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -150,7 +150,14 @@ export default function TeacherLoginPage({ onSuccess }) {
             {TEACHER_LOGIN_COPY.googleSignIn}
           </Button>
         </Panel>
-      </div>
+    </div>
+  )
+
+  if (embedded) return content
+
+  return (
+    <AppShell className="flex flex-col items-center justify-center px-4">
+      {content}
     </AppShell>
   )
 }

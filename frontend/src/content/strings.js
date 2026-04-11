@@ -1,18 +1,20 @@
 export const APP_COPY = {
   appName: "Teacher's Pet",
-  appTagline: 'AI-Powered Math Tutor',
+  appTagline: 'Where Every Math Problem Becomes an Aha Moment.',
   loading: 'Loading...',
   leave: 'Leave',
   back: '← Back',
 }
 
 export const ENTRY_COPY = {
+  heroTitle: 'Log in to your classroom',
+  heroSubtitle:
+    'Get instant, step-by-step support that turns confusion into confidence.',
   studentTitle: "I'm a Student",
   studentSubtitle: 'Enter your course code to start learning',
   teacherTitle: "I'm a Teacher",
   teacherSubtitle: 'Manage modules and view analytics',
-  guestTitle: 'Just Chat',
-  guestSubtitle: 'Continue without signing in',
+  visualAlt: "Teacher's Pet platform logo",
 }
 
 export const STUDENT_ENTRY_COPY = {

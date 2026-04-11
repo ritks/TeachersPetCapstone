@@ -11,6 +11,7 @@ import { db } from '../../firebase'
 import { CHAT_COPY } from '../../content/strings'
 import { getSpeechSynthesis, stripForSpeech, pickBestVoice, loadVoices } from '../../lib/speech'
 import { Button, Card, Input } from '../ui/primitives'
+import LogoMark from '../common/LogoMark'
 
 export const WELCOME_MESSAGE = {
   role: 'tutor',
@@ -53,15 +54,7 @@ const QUICK_ACTIONS = CHAT_COPY.quickActions.map((action, index) => ({
 function StudentEmptyState({ greeting, onQuickAction }) {
   return (
     <div className="flex flex-col items-center justify-center h-full px-6 py-12 select-none">
-      <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-6">
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-9 h-9 text-indigo-500" viewBox="0 0 24 24" fill="currentColor">
-          <ellipse cx="5.5" cy="6.5" rx="2.5" ry="3" />
-          <ellipse cx="10" cy="4" rx="2" ry="2.5" />
-          <ellipse cx="14.5" cy="4" rx="2" ry="2.5" />
-          <ellipse cx="18.5" cy="6.5" rx="2" ry="2.5" />
-          <path d="M12 9c-4.418 0-8 2.686-8 6 0 2.21 3.582 4 8 4s8-1.79 8-4c0-3.314-3.582-6-8-6z" />
-        </svg>
-      </div>
+      <LogoMark containerClassName="w-16 h-16 rounded-2xl bg-indigo-50 border border-[var(--color-brand-100)] mb-6 p-1" />
 
       <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">{greeting}</h2>
       <p className="text-gray-500 text-sm text-center mb-8 max-w-sm">
@@ -222,9 +215,7 @@ function InputBar({ value, onChange, onSubmit, disabled }) {
 function TypingIndicator() {
   return (
     <div className="flex items-end gap-2">
-      <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
-        <span className="text-white text-xs font-bold">TP</span>
-      </div>
+      <LogoMark containerClassName="w-8 h-8 rounded-full bg-indigo-600 border border-indigo-500 flex-shrink-0 shadow-sm p-0.5" imgClassName="rounded-full" />
       <div className="bg-white border border-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
         <div className="flex gap-1.5 items-center h-3">
           <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -303,9 +294,7 @@ export function Bubble({ message }) {
   return (
     <div className={`flex items-end gap-2 ${isStudent ? 'flex-row-reverse' : ''}`}>
       {!isStudent && (
-        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
-          <span className="text-white text-xs font-bold">TP</span>
-        </div>
+        <LogoMark containerClassName="w-8 h-8 rounded-full bg-indigo-600 border border-indigo-500 flex-shrink-0 shadow-sm p-0.5" imgClassName="rounded-full" />
       )}
 
       <div

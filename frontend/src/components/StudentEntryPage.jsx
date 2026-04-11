@@ -3,8 +3,9 @@ import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { STUDENT_ENTRY_COPY } from '../content/strings'
 import { AppShell, Button, Input, Panel } from './ui/primitives'
+import LogoMark from './common/LogoMark'
 
-export default function StudentEntryPage({ onSuccess }) {
+export default function StudentEntryPage({ onSuccess, embedded = false }) {
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -33,18 +34,23 @@ export default function StudentEntryPage({ onSuccess }) {
     }
   }
 
-  return (
-    <AppShell className="bg-gradient-to-br from-sky-50 via-white to-indigo-50 flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm">
+  const content = (
+    <div className="w-full max-w-sm">
+      {!embedded && (
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center mx-auto mb-3 shadow-lg">
-            <span className="text-white font-bold text-lg">TP</span>
-          </div>
+          <LogoMark containerClassName="w-14 h-14 rounded-full border border-white/60 mx-auto mb-3 shadow-lg p-1 bg-gradient-to-br from-blue-500 to-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">{STUDENT_ENTRY_COPY.title}</h2>
           <p className="text-gray-500 text-sm mt-1">{STUDENT_ENTRY_COPY.subtitle}</p>
         </div>
+      )}
 
-        <Panel className="p-6">
+      <Panel className={embedded ? 'p-5 bg-white/92 backdrop-blur-sm border-indigo-100 shadow-[0_14px_32px_rgba(27,38,59,0.12)]' : 'p-6'}>
+        {embedded && (
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">{STUDENT_ENTRY_COPY.title}</h3>
+            <p className="text-sm text-gray-500 mt-1">{STUDENT_ENTRY_COPY.subtitle}</p>
+          </div>
+        )}
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {error && (
               <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-600">
@@ -73,7 +79,14 @@ export default function StudentEntryPage({ onSuccess }) {
             </Button>
           </form>
         </Panel>
-      </div>
+    </div>
+  )
+
+  if (embedded) return content
+
+  return (
+    <AppShell className="bg-gradient-to-br from-sky-50 via-white to-indigo-50 flex flex-col items-center justify-center px-4">
+      {content}
     </AppShell>
   )
 }

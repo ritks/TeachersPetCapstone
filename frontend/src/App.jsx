@@ -7,8 +7,6 @@ import { db } from './firebase'
 import { APP_COPY } from './content/strings'
 import { useAuth } from './contexts/AuthContext'
 import EntryPage from './components/EntryPage'
-import TeacherLoginPage from './components/TeacherLoginPage'
-import StudentEntryPage from './components/StudentEntryPage'
 import ChatPanel, { WELCOME_MESSAGE } from './components/chat/ChatPanel'
 import LoadingSpinner from './components/common/LoadingSpinner'
 import StudentSidebar from './components/student/StudentSidebar'
@@ -21,20 +19,16 @@ const NAV_STATE_KEY = 'tpNav'
 
 const APP_VIEWS = {
   ENTRY: 'entry',
-  TEACHER_LOGIN: 'teacher-login',
-  STUDENT_ENTRY: 'student-entry',
   TEACHER: 'teacher',
   STUDENT: 'student',
-  GUEST: 'guest',
 }
 
 function getAppView({ userType, currentUser, studentData, authLoading }) {
   if (authLoading) return null
   if (userType === null) return APP_VIEWS.ENTRY
-  if (userType === 'teacher' && !currentUser) return APP_VIEWS.TEACHER_LOGIN
-  if (userType === 'student' && !studentData) return APP_VIEWS.STUDENT_ENTRY
+  if (userType === 'teacher' && !currentUser) return APP_VIEWS.ENTRY
+  if (userType === 'student' && !studentData) return APP_VIEWS.ENTRY
   if (userType === 'teacher') return APP_VIEWS.TEACHER
-  if (userType === 'guest') return APP_VIEWS.GUEST
   return APP_VIEWS.STUDENT
 }
 
@@ -131,18 +125,8 @@ export default function App() {
         case APP_VIEWS.ENTRY:
           setUserType(null)
           break
-        case APP_VIEWS.TEACHER_LOGIN:
-          setUserType('teacher')
-          break
-        case APP_VIEWS.STUDENT_ENTRY:
-          setUserType('student')
-          setStudentData(null)
-          break
         case APP_VIEWS.TEACHER:
           setUserType('teacher')
-          break
-        case APP_VIEWS.GUEST:
-          setUserType('guest')
           break
         case APP_VIEWS.STUDENT: {
           const data = loadStoredStudent()
@@ -190,19 +174,15 @@ export default function App() {
   if (userType === null) {
     return (
       <EntryPage
-        onStudentEntry={() => setUserType('student')}
-        onTeacherEntry={() => setUserType('teacher')}
-        onGuestEntry={() => setUserType('guest')}
+        onStudentEntry={() => {}}
+        onTeacherEntry={() => {}}
+        onStudentAuthSuccess={(data) => {
+          setStudentData(data)
+          setUserType('student')
+        }}
+        onTeacherAuthSuccess={() => setUserType('teacher')}
       />
     )
-  }
-
-  if (userType === 'teacher' && !currentUser) {
-    return <TeacherLoginPage onSuccess={() => {}} />
-  }
-
-  if (userType === 'student' && !studentData) {
-    return <StudentEntryPage onSuccess={(data) => setStudentData(data)} />
   }
 
   const handleLogout = async () => {
@@ -222,10 +202,6 @@ export default function App() {
         onLogout={handleLogout}
       />
     )
-  }
-
-  if (userType === 'guest') {
-    return <GuestApp onLeave={handleLogout} />
   }
 
   return (
@@ -470,34 +446,6 @@ function StudentApp({ studentData, onLogout }) {
           />
         )}
       </div>
-    </div>
-  )
-}
-
-function GuestApp({ onLeave }) {
-  return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-3 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0">
-              <span className="text-indigo-600 text-xs font-bold tracking-wider">TP</span>
-            </div>
-            <div>
-              <h1 className="text-sm font-semibold text-gray-800">{APP_COPY.appName}</h1>
-              <p className="text-xs text-gray-400">{APP_COPY.appTagline}</p>
-            </div>
-          </div>
-          <Button
-            onClick={onLeave}
-            variant="secondary"
-            size="md"
-          >
-            {APP_COPY.back}
-          </Button>
-        </div>
-      </header>
-      <ChatPanel selectedModuleId={null} userType="guest" studentData={null} />
     </div>
   )
 }
