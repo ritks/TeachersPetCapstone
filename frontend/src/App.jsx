@@ -1,17 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
-import {
-  doc,
-  getDoc,
-} from 'firebase/firestore'
-import { db } from './firebase'
 import { APP_COPY } from './content/strings'
 import { useAuth } from './contexts/AuthContext'
 import EntryPage from './components/EntryPage'
 import ChatPanel, { WELCOME_MESSAGE } from './components/chat/ChatPanel'
 import LoadingSpinner from './components/common/LoadingSpinner'
 import StudentSidebar from './components/student/StudentSidebar'
-import TeacherHeader from './components/teacher/TeacherHeader'
-import TeacherSidebar from './components/teacher/TeacherSidebar'
 import TeacherDashboard from './components/teacher/TeacherDashboard'
 import { Button } from './components/ui/primitives'
 
@@ -70,22 +63,6 @@ function makeNewSession() {
     backendSessionId: null,
     createdAt: Date.now(),
   }
-}
-
-function generateCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let code = ''
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)]
-  return code
-}
-
-async function getUniqueCode() {
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const code = generateCode()
-    const snap = await getDoc(doc(db, 'courseCodes', code))
-    if (!snap.exists()) return code
-  }
-  throw new Error('Could not generate a unique course code.')
 }
 
 export default function App() {
@@ -213,133 +190,7 @@ export default function App() {
 }
 
 function TeacherApp({ currentUser, onLogout }) {
-  const [page, setPage] = useState('chat')
-  const [modules, setModules] = useState([])
-  const [selectedModuleId, setSelectedModuleId] = useState(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [documents, setDocuments] = useState([])
-  const handlingPagePopRef = useRef(false)
-  const lastPageRef = useRef(null)
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined
-
-    const stateView = window.history.state?.[NAV_STATE_KEY]
-    if (stateView === 'teacher-dashboard') {
-      setPage('dashboard')
-      lastPageRef.current = 'dashboard'
-    } else {
-      setPage('chat')
-      window.history.replaceState(
-        { ...(window.history.state || {}), [NAV_STATE_KEY]: 'teacher-chat' },
-        '',
-        window.location.href,
-      )
-      lastPageRef.current = 'chat'
-    }
-
-    const onPopState = (event) => {
-      const view = event.state?.[NAV_STATE_KEY]
-      if (view !== 'teacher-chat' && view !== 'teacher-dashboard') return
-      handlingPagePopRef.current = true
-      setPage(view === 'teacher-dashboard' ? 'dashboard' : 'chat')
-    }
-
-    window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
-  }, [])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (lastPageRef.current === null) return
-
-    if (handlingPagePopRef.current) {
-      handlingPagePopRef.current = false
-      lastPageRef.current = page
-      return
-    }
-
-    if (page === lastPageRef.current) return
-
-    window.history.pushState(
-      {
-        ...(window.history.state || {}),
-        [NAV_STATE_KEY]: page === 'dashboard' ? 'teacher-dashboard' : 'teacher-chat',
-      },
-      '',
-      window.location.href,
-    )
-    lastPageRef.current = page
-  }, [page])
-
-  const refreshDocuments = async (moduleId) => {
-    const id = moduleId ?? selectedModuleId
-    if (!id) {
-      setDocuments([])
-      return
-    }
-    try {
-      const res = await fetch(`http://localhost:8000/modules/${id}/documents`)
-      const data = await res.json()
-      setDocuments(data)
-    } catch {
-      setDocuments([])
-    }
-  }
-
-  const refreshModules = async () => {
-    try {
-      const url = currentUser
-        ? `http://localhost:8000/modules?teacher_uid=${encodeURIComponent(currentUser.uid)}`
-        : 'http://localhost:8000/modules'
-      const res = await fetch(url)
-      const data = await res.json()
-      setModules(data)
-    } catch {
-      /* ignore */
-    }
-  }
-
-  useEffect(() => { refreshModules() }, [currentUser])
-  useEffect(() => { refreshDocuments() }, [selectedModuleId])
-
-  const selectedModule = modules.find((m) => m.id === selectedModuleId) ?? null
-
-  if (page === 'dashboard') {
-    return <TeacherDashboard onBack={() => setPage('chat')} onLogout={onLogout} currentUser={currentUser} />
-  }
-
-  return (
-    <div className="flex flex-row h-screen bg-gray-50">
-      <TeacherSidebar
-        open={sidebarOpen}
-        onToggle={() => setSidebarOpen((v) => !v)}
-        modules={modules}
-        selectedModuleId={selectedModuleId}
-        onSelect={setSelectedModuleId}
-        onModuleCreated={refreshModules}
-        documents={documents}
-        onDocumentsChanged={refreshDocuments}
-        currentUser={currentUser}
-        createUniqueCode={getUniqueCode}
-      />
-
-      <div className="flex flex-col flex-1 min-w-0">
-        <TeacherHeader
-          selectedModule={selectedModule}
-          currentUser={currentUser}
-          onLogout={onLogout}
-          onDashboard={() => setPage('dashboard')}
-        />
-
-        <ChatPanel
-          selectedModuleId={selectedModuleId}
-          userType="teacher"
-          studentData={null}
-        />
-      </div>
-    </div>
-  )
+  return <TeacherDashboard onLogout={onLogout} currentUser={currentUser} />
 }
 
 function StudentApp({ studentData, onLogout }) {
