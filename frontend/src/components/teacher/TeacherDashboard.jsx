@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import AnalyticsDashboard from '../AnalyticsDashboard'
-import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
+import { addDoc, collection, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { Badge, Button, Card, Input, Panel } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
@@ -58,27 +58,10 @@ function DashboardCard({ title, description, icon, tag, tagTone = 'neutral', cta
   )
 }
 
-function generateCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let code = ''
-  for (let i = 0; i < 6; i += 1) code += chars[Math.floor(Math.random() * chars.length)]
-  return code
-}
-
-async function getUniqueCode() {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const code = generateCode()
-    const snap = await getDoc(doc(db, 'courseCodes', code))
-    if (!snap.exists()) return code
-  }
-  throw new Error('Could not generate a unique course code.')
-}
-
 function ClassManagementPanel({ currentUser }) {
   const [loading, setLoading] = useState(true)
   const [classes, setClasses] = useState([])
   const [modulesByClass, setModulesByClass] = useState({})
-  const [courseCodes, setCourseCodes] = useState({})
   const [insightsByClass, setInsightsByClass] = useState({})
   const [showCreateClassForm, setShowCreateClassForm] = useState(false)
   const [creatingClass, setCreatingClass] = useState(false)
@@ -86,13 +69,25 @@ function ClassManagementPanel({ currentUser }) {
   const [newClassDesc, setNewClassDesc] = useState('')
   const [moduleDrafts, setModuleDrafts] = useState({})
   const [creatingModuleForClass, setCreatingModuleForClass] = useState(null)
-  const [generatingForModule, setGeneratingForModule] = useState(null)
-  const [copiedCode, setCopiedCode] = useState(null)
+  const [moduleAccessByKey, setModuleAccessByKey] = useState({})
   const [errorMessage, setErrorMessage] = useState('')
   const [infoMessage, setInfoMessage] = useState('')
+  const [studentsByClass, setStudentsByClass] = useState({})
+  const [studentDraftByClass, setStudentDraftByClass] = useState({})
+  const [addingStudentForClass, setAddingStudentForClass] = useState(null)
+  const [groupsByClass, setGroupsByClass] = useState({})
+  const [moduleGroupAccess, setModuleGroupAccess] = useState({})
+  const [groupDraftByClass, setGroupDraftByClass] = useState({})
+  const [creatingGroupForClass, setCreatingGroupForClass] = useState(null)
+  const [classDetailTab, setClassDetailTab] = useState('roster')
+  const [selectedClassId, setSelectedClassId] = useState(null)
 
   const localClassesKey = currentUser ? `tp_teacher_classes_${currentUser.uid}` : null
   const localLinksKey = currentUser ? `tp_class_modules_${currentUser.uid}` : null
+  const localStudentsKey = currentUser ? `tp_class_students_${currentUser.uid}` : null
+  const localAccessKey = currentUser ? `tp_module_access_${currentUser.uid}` : null
+  const localGroupsKey = currentUser ? `tp_class_groups_${currentUser.uid}` : null
+  const localGroupAccessKey = currentUser ? `tp_module_group_access_${currentUser.uid}` : null
 
   const readLocal = (key, fallback = []) => {
     try {
@@ -124,6 +119,18 @@ function ClassManagementPanel({ currentUser }) {
     }))
   }
 
+  const getStudentDraft = (classId) => studentDraftByClass[classId] || ''
+  const updateStudentDraft = (classId, value) => {
+    setStudentDraftByClass((prev) => ({ ...prev, [classId]: value }))
+  }
+  const getGroupDraft = (classId) => groupDraftByClass[classId] || ''
+  const updateGroupDraft = (classId, value) => {
+    setGroupDraftByClass((prev) => ({ ...prev, [classId]: value }))
+  }
+
+  const moduleGroupKey = (classId, moduleId) => `${classId}::${moduleId}`
+  const moduleStudentKey = (classId, moduleId, studentEmail) => `${classId}::${moduleId}::${studentEmail}`
+
   const refreshData = async () => {
     if (!currentUser) return
     setLoading(true)
@@ -134,11 +141,23 @@ function ClassManagementPanel({ currentUser }) {
         fetch(`http://localhost:8000/modules?teacher_uid=${encodeURIComponent(currentUser.uid)}`),
         getDocs(query(collection(db, 'teacherClasses'), where('teacherUid', '==', currentUser.uid))),
         getDocs(query(collection(db, 'classModules'), where('teacherUid', '==', currentUser.uid))),
-        getDocs(query(collection(db, 'courseCodes'), where('teacherUid', '==', currentUser.uid))),
         getDocs(query(collection(db, 'prompts'), where('teacherUid', '==', currentUser.uid))),
+        getDocs(query(collection(db, 'classStudents'), where('teacherUid', '==', currentUser.uid))),
+        getDocs(query(collection(db, 'moduleAccess'), where('teacherUid', '==', currentUser.uid))),
+        getDocs(query(collection(db, 'classGroups'), where('teacherUid', '==', currentUser.uid))),
+        getDocs(query(collection(db, 'moduleGroupAccess'), where('teacherUid', '==', currentUser.uid))),
       ])
 
-      const [moduleResState, classesState, classModulesState, codesState, promptsState] = settled
+      const [
+        moduleResState,
+        classesState,
+        classModulesState,
+        promptsState,
+        studentsState,
+        accessState,
+        groupsState,
+        groupAccessState,
+      ] = settled
 
       const moduleData = moduleResState.status === 'fulfilled'
         ? await moduleResState.value.json()
@@ -177,13 +196,71 @@ function ClassManagementPanel({ currentUser }) {
       })
       setModulesByClass(moduleGroups)
 
-      const codeMap = {}
-      const codeDocs = codesState.status === 'fulfilled' ? codesState.value.docs : []
-      codeDocs.forEach((d) => {
-        const data = d.data()
-        if (data.moduleId) codeMap[data.moduleId] = d.id
+      const remoteStudents = studentsState.status === 'fulfilled'
+        ? studentsState.value.docs.map((d) => ({ id: d.id, ...d.data() }))
+        : []
+      const localStudents = readLocal(localStudentsKey, [])
+      const allStudents = [...remoteStudents, ...localStudents]
+      const studentMapByClass = {}
+      allStudents.forEach((row) => {
+        if (!row.classId || !row.studentEmail) return
+        if (!studentMapByClass[row.classId]) studentMapByClass[row.classId] = []
+        const exists = studentMapByClass[row.classId].some((s) => s.studentEmail === row.studentEmail)
+        if (!exists) studentMapByClass[row.classId].push(row)
       })
-      setCourseCodes(codeMap)
+      setStudentsByClass(studentMapByClass)
+
+      const remoteAccess = accessState.status === 'fulfilled'
+        ? accessState.value.docs.map((d) => ({ id: d.id, ...d.data() }))
+        : []
+      const localAccess = readLocal(localAccessKey, [])
+      const accessMap = {}
+      ;[...remoteAccess, ...localAccess].forEach((row) => {
+        if (!row.classId || !row.moduleId || !row.studentEmail) return
+        accessMap[moduleStudentKey(row.classId, row.moduleId, row.studentEmail)] = {
+          isUnlocked: Boolean(row.isUnlocked),
+          source: row.source || 'group',
+        }
+      })
+      setModuleAccessByKey(accessMap)
+
+      const remoteGroups = groupsState.status === 'fulfilled'
+        ? groupsState.value.docs.map((d) => ({ id: d.id, ...d.data() }))
+        : []
+      const localGroups = readLocal(localGroupsKey, [])
+      const groupMap = {}
+      ;[...remoteGroups, ...localGroups].forEach((row) => {
+        if (!row.classId || !row.name) return
+        const id = row.id || `local-group-${row.classId}-${row.name}`
+        groupMap[id] = {
+          id,
+          classId: row.classId,
+          name: row.name,
+          members: Array.isArray(row.members) ? row.members.filter(Boolean) : [],
+        }
+      })
+      const nextGroupsByClass = {}
+      Object.values(groupMap).forEach((groupItem) => {
+        if (!nextGroupsByClass[groupItem.classId]) nextGroupsByClass[groupItem.classId] = []
+        nextGroupsByClass[groupItem.classId].push(groupItem)
+      })
+      Object.keys(nextGroupsByClass).forEach((classId) => {
+        nextGroupsByClass[classId].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+      })
+      setGroupsByClass(nextGroupsByClass)
+
+      const remoteGroupAccess = groupAccessState.status === 'fulfilled'
+        ? groupAccessState.value.docs.map((d) => ({ id: d.id, ...d.data() }))
+        : []
+      const localGroupAccess = readLocal(localGroupAccessKey, [])
+      const groupAccessMap = {}
+      ;[...remoteGroupAccess, ...localGroupAccess].forEach((row) => {
+        if (!row.classId || !row.moduleId) return
+        groupAccessMap[moduleGroupKey(row.classId, row.moduleId)] = Array.isArray(row.groupIds)
+          ? [...new Set(row.groupIds.filter(Boolean))]
+          : []
+      })
+      setModuleGroupAccess(groupAccessMap)
 
       const promptDocs = promptsState.status === 'fulfilled' ? promptsState.value.docs.map((d) => d.data()) : []
       const classInsights = {}
@@ -203,7 +280,7 @@ function ClassManagementPanel({ currentUser }) {
 
         classInsights[classItem.id] = {
           modules: classModules.length,
-          activeStudents,
+          activeStudents: studentMapByClass[classItem.id]?.length ?? activeStudents,
           totalPrompts: classPrompts.length,
           latestTs,
         }
@@ -216,6 +293,12 @@ function ClassManagementPanel({ currentUser }) {
       if (classesState.status === 'rejected' || classModulesState.status === 'rejected') {
         setInfoMessage('Using local class storage because cloud class permissions are limited.')
       }
+      if (studentsState.status === 'rejected' || accessState.status === 'rejected') {
+        setInfoMessage('Some student roster permissions are limited. Local fallback is active.')
+      }
+      if (groupsState.status === 'rejected' || groupAccessState.status === 'rejected') {
+        setInfoMessage('Some group assignment permissions are limited. Local fallback is active.')
+      }
     } catch {
       setErrorMessage('Unable to load class data right now. Please try again.')
     } finally {
@@ -226,6 +309,19 @@ function ClassManagementPanel({ currentUser }) {
   useEffect(() => {
     refreshData()
   }, [currentUser])
+
+  useEffect(() => {
+    if (!selectedClassId) return
+    if (!classes.some((c) => c.id === selectedClassId)) {
+      setSelectedClassId(null)
+    }
+  }, [classes, selectedClassId])
+
+  useEffect(() => {
+    if (!selectedClassId) {
+      setClassDetailTab('roster')
+    }
+  }, [selectedClassId])
 
   const handleCreateClass = async (e) => {
     e.preventDefault()
@@ -289,9 +385,11 @@ function ClassManagementPanel({ currentUser }) {
       const created = await response.json()
 
       if (created?.id) {
+        const classRef = classes.find((c) => c.id === classId)
         try {
           await addDoc(collection(db, 'classModules'), {
             classId,
+            className: classRef?.name || null,
             moduleId: created.id,
             moduleName: created.name,
             teacherUid: currentUser.uid,
@@ -301,6 +399,7 @@ function ClassManagementPanel({ currentUser }) {
           const localLinks = readLocal(localLinksKey, [])
           localLinks.unshift({
             classId,
+            className: classRef?.name || null,
             moduleId: created.id,
             moduleName: created.name,
             teacherUid: currentUser.uid,
@@ -318,34 +417,312 @@ function ClassManagementPanel({ currentUser }) {
     }
   }
 
-  const handleGenerateCode = async (moduleItem, classId) => {
-    if (!currentUser) return
-    setGeneratingForModule(moduleItem.id)
+  const handleAddStudentToClass = async (classId) => {
+    if (!currentUser || addingStudentForClass) return
+    const raw = getStudentDraft(classId).trim().toLowerCase()
+    if (!raw) return
+    if (!raw.includes('@')) {
+      setErrorMessage('Please enter a valid student email.')
+      return
+    }
+
+    const alreadyExists = (studentsByClass[classId] || []).some((s) => s.studentEmail === raw)
+    if (alreadyExists) {
+      setErrorMessage('That student email is already in this class.')
+      return
+    }
+
+    setAddingStudentForClass(classId)
+    setErrorMessage('')
     try {
-      const code = await getUniqueCode()
-      await setDoc(doc(db, 'courseCodes', code), {
-        moduleId: moduleItem.id,
-        moduleName: moduleItem.name,
-        classId,
-        className: classes.find((c) => c.id === classId)?.name || null,
-        teacherUid: currentUser.uid,
-        teacherName: currentUser.displayName || currentUser.email || null,
-        createdAt: serverTimestamp(),
-      })
-      setCourseCodes((prev) => ({ ...prev, [moduleItem.id]: code }))
+      try {
+        const classRef = classes.find((c) => c.id === classId)
+        await addDoc(collection(db, 'classStudents'), {
+          classId,
+          className: classRef?.name || null,
+          teacherUid: currentUser.uid,
+          teacherName: currentUser.displayName || currentUser.email || null,
+          studentEmail: raw,
+          studentUid: null,
+          status: 'invited',
+          createdAt: serverTimestamp(),
+        })
+      } catch {
+        const localStudents = readLocal(localStudentsKey, [])
+        localStudents.unshift({
+          id: `local-student-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          classId,
+          className: classes.find((c) => c.id === classId)?.name || null,
+          teacherUid: currentUser.uid,
+          teacherName: currentUser.displayName || currentUser.email || null,
+          studentEmail: raw,
+          studentUid: null,
+          status: 'invited',
+          createdAt: Date.now(),
+        })
+        writeLocal(localStudentsKey, localStudents)
+        setInfoMessage('Student roster update saved locally (cloud permissions blocked).')
+      }
+
+      updateStudentDraft(classId, '')
       await refreshData()
     } finally {
-      setGeneratingForModule(null)
+      setAddingStudentForClass(null)
     }
   }
 
-  const handleCopyCode = async (code) => {
+  const handleCreateGroup = async (classId) => {
+    if (!currentUser || creatingGroupForClass) return
+    const name = getGroupDraft(classId).trim()
+    if (!name) return
+    const existing = (groupsByClass[classId] || []).some((groupItem) => groupItem.name.toLowerCase() === name.toLowerCase())
+    if (existing) {
+      setErrorMessage('A group with that name already exists in this class.')
+      return
+    }
+
+    setCreatingGroupForClass(classId)
+    setErrorMessage('')
     try {
-      await navigator.clipboard.writeText(code)
-      setCopiedCode(code)
-      setTimeout(() => setCopiedCode(null), 1800)
+      try {
+        await addDoc(collection(db, 'classGroups'), {
+          classId,
+          className: classes.find((c) => c.id === classId)?.name || null,
+          teacherUid: currentUser.uid,
+          name,
+          members: [],
+          createdAt: serverTimestamp(),
+        })
+      } catch {
+        const localGroups = readLocal(localGroupsKey, [])
+        localGroups.unshift({
+          id: `local-group-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          classId,
+          className: classes.find((c) => c.id === classId)?.name || null,
+          teacherUid: currentUser.uid,
+          name,
+          members: [],
+          createdAt: Date.now(),
+        })
+        writeLocal(localGroupsKey, localGroups)
+        setInfoMessage('Group saved locally (cloud permissions blocked).')
+      }
+
+      updateGroupDraft(classId, '')
+      await refreshData()
+    } finally {
+      setCreatingGroupForClass(null)
+    }
+  }
+
+  const handleToggleStudentInGroup = async ({ classId, groupItem, studentEmail }) => {
+    if (!currentUser || !groupItem?.id || !studentEmail) return
+    const currentMembers = Array.isArray(groupItem.members) ? groupItem.members : []
+    const hasStudent = currentMembers.includes(studentEmail)
+    const nextMembers = hasStudent
+      ? currentMembers.filter((email) => email !== studentEmail)
+      : [...currentMembers, studentEmail]
+
+    try {
+      try {
+        await setDoc(doc(db, 'classGroups', groupItem.id), {
+          classId,
+          className: classes.find((c) => c.id === classId)?.name || null,
+          teacherUid: currentUser.uid,
+          name: groupItem.name,
+          members: nextMembers,
+          updatedAt: serverTimestamp(),
+        }, { merge: true })
+      } catch {
+        const localGroups = readLocal(localGroupsKey, [])
+        const idx = localGroups.findIndex((row) => row.id === groupItem.id)
+        if (idx >= 0) {
+          localGroups[idx] = { ...localGroups[idx], members: nextMembers, updatedAt: Date.now() }
+        } else {
+          localGroups.unshift({
+            id: groupItem.id,
+            classId,
+            className: classes.find((c) => c.id === classId)?.name || null,
+            teacherUid: currentUser.uid,
+            name: groupItem.name,
+            members: nextMembers,
+            updatedAt: Date.now(),
+          })
+        }
+        writeLocal(localGroupsKey, localGroups)
+        setInfoMessage('Group membership saved locally (cloud permissions blocked).')
+      }
+
+      setGroupsByClass((prev) => ({
+        ...prev,
+        [classId]: (prev[classId] || []).map((row) => (row.id === groupItem.id ? { ...row, members: nextMembers } : row)),
+      }))
     } catch {
-      // noop
+      setErrorMessage('Could not update group membership.')
+    }
+  }
+
+  const handleToggleGroupForModule = async ({ classId, moduleItem, groupId }) => {
+    if (!currentUser || !moduleItem?.id || !groupId) return
+
+    const key = moduleGroupKey(classId, moduleItem.id)
+    const assigned = moduleGroupAccess[key] || []
+    const nextGroupIds = assigned.includes(groupId)
+      ? assigned.filter((id) => id !== groupId)
+      : [...assigned, groupId]
+    const classGroups = groupsByClass[classId] || []
+    const classStudents = studentsByClass[classId] || []
+    const allowedEmails = new Set(
+      classGroups
+        .filter((groupItem) => nextGroupIds.includes(groupItem.id))
+        .flatMap((groupItem) => Array.isArray(groupItem.members) ? groupItem.members : [])
+        .filter(Boolean),
+    )
+    const allClassEmails = [...new Set(classStudents.map((row) => row.studentEmail).filter(Boolean))]
+    const groupManagedEmails = allClassEmails.filter((email) => {
+      const keyForStudent = moduleStudentKey(classId, moduleItem.id, email)
+      return moduleAccessByKey[keyForStudent]?.source !== 'manual'
+    })
+
+    try {
+      try {
+        const accessDocId = `${classId}_${moduleItem.id}`.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 120)
+        await setDoc(doc(db, 'moduleGroupAccess', accessDocId), {
+          classId,
+          className: classes.find((c) => c.id === classId)?.name || null,
+          moduleId: moduleItem.id,
+          moduleName: moduleItem.name || null,
+          teacherUid: currentUser.uid,
+          groupIds: nextGroupIds,
+          updatedAt: serverTimestamp(),
+        }, { merge: true })
+
+        await Promise.all(
+          groupManagedEmails.map((email) => {
+            const docId = `${classId}_${moduleItem.id}_${email.replace(/[^a-zA-Z0-9]/g, '_')}`.slice(0, 120)
+            return setDoc(doc(db, 'moduleAccess', docId), {
+              classId,
+              className: classes.find((c) => c.id === classId)?.name || null,
+              moduleId: moduleItem.id,
+              moduleName: moduleItem.name || null,
+              teacherUid: currentUser.uid,
+              studentEmail: email,
+              isUnlocked: allowedEmails.has(email),
+              source: 'group',
+              updatedAt: serverTimestamp(),
+              unlockedAt: allowedEmails.has(email) ? serverTimestamp() : null,
+            }, { merge: true })
+          }),
+        )
+      } catch {
+        const localGroupAccess = readLocal(localGroupAccessKey, [])
+        const idx = localGroupAccess.findIndex((row) => row.classId === classId && row.moduleId === moduleItem.id)
+        const payload = {
+          classId,
+          className: classes.find((c) => c.id === classId)?.name || null,
+          moduleId: moduleItem.id,
+          moduleName: moduleItem.name || null,
+          teacherUid: currentUser.uid,
+          groupIds: nextGroupIds,
+          updatedAt: Date.now(),
+        }
+        if (idx >= 0) localGroupAccess[idx] = { ...localGroupAccess[idx], ...payload }
+        else localGroupAccess.unshift(payload)
+        writeLocal(localGroupAccessKey, localGroupAccess)
+
+        const localAccess = readLocal(localAccessKey, [])
+        groupManagedEmails.forEach((email) => {
+          const existingIdx = localAccess.findIndex((row) => row.classId === classId && row.moduleId === moduleItem.id && row.studentEmail === email)
+          const nextRow = {
+            classId,
+            className: classes.find((c) => c.id === classId)?.name || null,
+            moduleId: moduleItem.id,
+            moduleName: moduleItem.name || null,
+            teacherUid: currentUser.uid,
+            studentEmail: email,
+            isUnlocked: allowedEmails.has(email),
+            source: 'group',
+            updatedAt: Date.now(),
+          }
+          if (existingIdx >= 0) localAccess[existingIdx] = { ...localAccess[existingIdx], ...nextRow }
+          else localAccess.unshift(nextRow)
+        })
+        writeLocal(localAccessKey, localAccess)
+        setInfoMessage('Group module access saved locally (cloud permissions blocked).')
+      }
+
+      setModuleGroupAccess((prev) => ({ ...prev, [key]: nextGroupIds }))
+      setModuleAccessByKey((prev) => {
+        const next = { ...prev }
+        groupManagedEmails.forEach((email) => {
+          const studentKey = moduleStudentKey(classId, moduleItem.id, email)
+          next[studentKey] = {
+            isUnlocked: allowedEmails.has(email),
+            source: 'group',
+          }
+        })
+        return next
+      })
+    } catch {
+      setErrorMessage('Could not update module access for selected groups.')
+    }
+  }
+
+  const handleToggleIndividualModuleAccess = async ({ classId, moduleItem, studentEmail }) => {
+    if (!currentUser || !classId || !moduleItem?.id || !studentEmail) return
+
+    const classGroups = groupsByClass[classId] || []
+    const assignedGroups = moduleGroupAccess[moduleGroupKey(classId, moduleItem.id)] || []
+    const groupDerivedUnlocked = classGroups
+      .filter((groupItem) => assignedGroups.includes(groupItem.id))
+      .some((groupItem) => (groupItem.members || []).includes(studentEmail))
+
+    const key = moduleStudentKey(classId, moduleItem.id, studentEmail)
+    const existing = moduleAccessByKey[key]
+    const currentUnlocked = existing?.source === 'manual' ? Boolean(existing.isUnlocked) : groupDerivedUnlocked
+    const nextUnlocked = !currentUnlocked
+    const docId = `${classId}_${moduleItem.id}_${studentEmail.replace(/[^a-zA-Z0-9]/g, '_')}`.slice(0, 120)
+
+    try {
+      try {
+        await setDoc(doc(db, 'moduleAccess', docId), {
+          classId,
+          className: classes.find((c) => c.id === classId)?.name || null,
+          moduleId: moduleItem.id,
+          moduleName: moduleItem.name || null,
+          teacherUid: currentUser.uid,
+          studentEmail,
+          isUnlocked: nextUnlocked,
+          source: 'manual',
+          updatedAt: serverTimestamp(),
+          unlockedAt: nextUnlocked ? serverTimestamp() : null,
+        }, { merge: true })
+      } catch {
+        const localAccess = readLocal(localAccessKey, [])
+        const idx = localAccess.findIndex((row) => row.classId === classId && row.moduleId === moduleItem.id && row.studentEmail === studentEmail)
+        const payload = {
+          classId,
+          className: classes.find((c) => c.id === classId)?.name || null,
+          moduleId: moduleItem.id,
+          moduleName: moduleItem.name || null,
+          teacherUid: currentUser.uid,
+          studentEmail,
+          isUnlocked: nextUnlocked,
+          source: 'manual',
+          updatedAt: Date.now(),
+        }
+        if (idx >= 0) localAccess[idx] = { ...localAccess[idx], ...payload }
+        else localAccess.unshift(payload)
+        writeLocal(localAccessKey, localAccess)
+        setInfoMessage('Individual module access saved locally (cloud permissions blocked).')
+      }
+
+      setModuleAccessByKey((prev) => ({
+        ...prev,
+        [key]: { isUnlocked: nextUnlocked, source: 'manual' },
+      }))
+    } catch {
+      setErrorMessage('Could not update individual module access.')
     }
   }
 
@@ -360,7 +737,7 @@ function ClassManagementPanel({ currentUser }) {
         <div>
           <h3 className="text-xl font-semibold text-[var(--color-text-primary)]">Class Management</h3>
           <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-            Create classes, add modules, generate join codes, and review class-level insights.
+            Create classes, organize rosters, assign groups, and review class-level insights.
           </p>
         </div>
         {!showCreateClassForm && (
@@ -406,131 +783,384 @@ function ClassManagementPanel({ currentUser }) {
           No classes yet. Start by creating your first class.
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          {classes.map((classItem) => {
-            const classModules = modulesByClass[classItem.id] || []
-            const insight = insightsByClass[classItem.id] || { modules: 0, activeStudents: 0, totalPrompts: 0, latestTs: 0 }
-            const draft = getModuleDraft(classItem.id)
-
-            return (
-              <Card key={classItem.id} className="p-5 border-[rgba(65,90,119,0.24)] bg-[linear-gradient(150deg,rgba(236,241,246,0.92),rgba(223,232,242,0.78))]">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h4 className="text-lg font-semibold text-[var(--color-text-primary)]">{classItem.name}</h4>
-                    {classItem.description && (
-                      <p className="text-sm text-[var(--color-text-secondary)] mt-1 line-clamp-2">{classItem.description}</p>
-                    )}
-                  </div>
-                  <Badge tone="brand">Class</Badge>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 mt-4">
-                  <div className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 px-3 py-2">
-                    <p className="text-[0.68rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">Modules</p>
-                    <p className="text-lg font-semibold text-[var(--color-text-primary)]">{insight.modules}</p>
-                  </div>
-                  <div className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 px-3 py-2">
-                    <p className="text-[0.68rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">Active Students</p>
-                    <p className="text-lg font-semibold text-[var(--color-text-primary)]">{insight.activeStudents}</p>
-                  </div>
-                  <div className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 px-3 py-2">
-                    <p className="text-[0.68rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">Insights</p>
-                    <p className="text-lg font-semibold text-[var(--color-text-primary)]">{insight.totalPrompts}</p>
-                  </div>
-                </div>
-
-                <p className="text-xs text-[var(--color-text-muted)] mt-3">{formatLatestActivity(insight.latestTs)}</p>
-
-                <div className="mt-4 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-[var(--color-text-primary)]">Modules</p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => updateModuleDraft(classItem.id, { open: !draft.open })}
+        <>
+          {!selectedClassId ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {classes.map((classItem) => {
+                const insight = insightsByClass[classItem.id] || { modules: 0, activeStudents: 0, totalPrompts: 0 }
+                return (
+                  <Card
+                    key={classItem.id}
+                    interactive
+                    onClick={() => setSelectedClassId(classItem.id)}
+                    className="p-5 border-[rgba(65,90,119,0.24)] bg-[linear-gradient(150deg,rgba(236,241,246,0.92),rgba(223,232,242,0.78))] cursor-pointer hover:-translate-y-0.5 transition-all"
                   >
-                    {draft.open ? 'Close' : '+ New Module'}
-                  </Button>
-                </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h4 className="text-lg font-semibold text-[var(--color-text-primary)]">{classItem.name}</h4>
+                        {classItem.description && (
+                          <p className="text-sm text-[var(--color-text-secondary)] mt-1 line-clamp-2">{classItem.description}</p>
+                        )}
+                      </div>
+                      <Badge tone="brand">Class</Badge>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2.5 mt-4">
+                      <div className="rounded-xl border border-[rgba(65,90,119,0.2)] bg-[linear-gradient(150deg,rgba(248,249,250,0.94),rgba(236,241,248,0.9))] px-3 py-2.5">
+                        <p className="text-[0.58rem] leading-none font-semibold uppercase tracking-[0.1em] whitespace-nowrap text-[var(--color-text-muted)]">Modules</p>
+                        <p className="text-[1.35rem] leading-none font-semibold text-[var(--color-primary-700)] mt-1">{insight.modules}</p>
+                      </div>
+                      <div className="rounded-xl border border-[rgba(65,90,119,0.2)] bg-[linear-gradient(150deg,rgba(248,249,250,0.94),rgba(236,241,248,0.9))] px-3 py-2.5">
+                        <p className="text-[0.58rem] leading-none font-semibold uppercase tracking-[0.1em] whitespace-nowrap text-[var(--color-text-muted)]">Students</p>
+                        <p className="text-[1.35rem] leading-none font-semibold text-[var(--color-primary-700)] mt-1">{insight.activeStudents}</p>
+                      </div>
+                      <div className="rounded-xl border border-[rgba(65,90,119,0.2)] bg-[linear-gradient(150deg,rgba(248,249,250,0.94),rgba(236,241,248,0.9))] px-3 py-2.5">
+                        <p className="text-[0.58rem] leading-none font-semibold uppercase tracking-[0.1em] whitespace-nowrap text-[var(--color-text-muted)]">Insights</p>
+                        <p className="text-[1.35rem] leading-none font-semibold text-[var(--color-primary-700)] mt-1">{insight.totalPrompts}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm font-semibold text-[var(--color-brand-600)] mt-4">Open Course →</p>
+                  </Card>
+                )
+              })}
+            </div>
+          ) : (
+            (() => {
+              const classItem = classes.find((c) => c.id === selectedClassId)
+              if (!classItem) return null
+              const classModules = modulesByClass[classItem.id] || []
+              const insight = insightsByClass[classItem.id] || { modules: 0, activeStudents: 0, totalPrompts: 0, latestTs: 0 }
+              const draft = getModuleDraft(classItem.id)
+              const classStudents = studentsByClass[classItem.id] || []
+              const studentDraft = getStudentDraft(classItem.id)
+              const classGroups = groupsByClass[classItem.id] || []
+              const groupDraft = getGroupDraft(classItem.id)
 
-                {draft.open && (
-                  <div className="mt-3 rounded-xl border border-[rgba(65,90,119,0.22)] bg-white/80 p-3">
-                    <div className="grid grid-cols-1 gap-2">
-                      <Input
-                        value={draft.name}
-                        onChange={(e) => updateModuleDraft(classItem.id, { name: e.target.value })}
-                        placeholder="Module name"
-                      />
-                      <Input
-                        value={draft.description}
-                        onChange={(e) => updateModuleDraft(classItem.id, { description: e.target.value })}
-                        placeholder="Module description (optional)"
-                      />
+              return (
+                <div className="space-y-4">
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setSelectedClassId(null)}>
+                    ← Back To All Courses
+                  </Button>
+                  <Card className="p-5 border-[rgba(65,90,119,0.24)] bg-[linear-gradient(150deg,rgba(236,241,246,0.92),rgba(223,232,242,0.78))]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h4 className="text-lg font-semibold text-[var(--color-text-primary)]">{classItem.name}</h4>
+                        {classItem.description && (
+                          <p className="text-sm text-[var(--color-text-secondary)] mt-1 line-clamp-2">{classItem.description}</p>
+                        )}
+                      </div>
+                      <Badge tone="brand">Class</Badge>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 mt-4">
+                      <div className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 px-3 py-2">
+                        <p className="text-[0.68rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">Modules</p>
+                        <p className="text-lg font-semibold text-[var(--color-text-primary)]">{insight.modules}</p>
+                      </div>
+                      <div className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 px-3 py-2">
+                        <p className="text-[0.68rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">Active Students</p>
+                        <p className="text-lg font-semibold text-[var(--color-text-primary)]">{insight.activeStudents}</p>
+                      </div>
+                      <div className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 px-3 py-2">
+                        <p className="text-[0.68rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">Insights</p>
+                        <p className="text-lg font-semibold text-[var(--color-text-primary)]">{insight.totalPrompts}</p>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-[var(--color-text-muted)] mt-3">{formatLatestActivity(insight.latestTs)}</p>
+                    <div className="mt-4 rounded-xl border border-[rgba(65,90,119,0.22)] bg-[rgba(255,255,255,0.46)] p-2 grid grid-cols-3 gap-1.5">
                       <Button
                         type="button"
-                        variant="primary"
                         size="sm"
-                        className="w-fit"
-                        disabled={!draft.name.trim() || creatingModuleForClass === classItem.id}
-                        onClick={() => handleCreateModuleForClass(classItem.id)}
+                        variant={classDetailTab === 'roster' ? 'primary' : 'secondary'}
+                        className="w-full"
+                        onClick={() => setClassDetailTab('roster')}
                       >
-                        {creatingModuleForClass === classItem.id ? 'Creating...' : 'Create Module'}
+                        Roster
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={classDetailTab === 'groups' ? 'primary' : 'secondary'}
+                        className="w-full"
+                        onClick={() => setClassDetailTab('groups')}
+                      >
+                        Groups
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={classDetailTab === 'modules' ? 'primary' : 'secondary'}
+                        className="w-full"
+                        onClick={() => setClassDetailTab('modules')}
+                      >
+                        Modules
                       </Button>
                     </div>
-                  </div>
-                )}
 
-                <div className="mt-3 space-y-2">
-                  {classModules.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-[rgba(65,90,119,0.28)] bg-white/55 px-3 py-2.5 text-sm text-[var(--color-text-secondary)]">
-                      No modules yet for this class.
-                    </div>
-                  ) : (
-                    classModules.map((moduleItem) => {
-                      const code = courseCodes[moduleItem.id]
-                      const isGenerating = generatingForModule === moduleItem.id
+                    {classDetailTab === 'roster' && (
+                      <div className="mt-4 rounded-xl border border-[rgba(65,90,119,0.2)] bg-white/65 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-[var(--color-text-primary)]">Class Roster</p>
+                          <Badge tone="neutral">{classStudents.length} enrolled</Badge>
+                        </div>
+                        <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                          Add students once here, then assign module access through groups.
+                        </p>
 
-                      return (
-                        <div key={moduleItem.id} className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 p-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{moduleItem.name}</p>
-                              {moduleItem.description && (
-                                <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 line-clamp-2">{moduleItem.description}</p>
-                              )}
+                        <div className="mt-2 flex gap-2">
+                          <Input
+                            value={studentDraft}
+                            onChange={(e) => updateStudentDraft(classItem.id, e.target.value)}
+                            placeholder="student@email.com"
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={!studentDraft.trim() || addingStudentForClass === classItem.id}
+                            onClick={() => handleAddStudentToClass(classItem.id)}
+                          >
+                            {addingStudentForClass === classItem.id ? 'Adding...' : 'Add Student'}
+                          </Button>
+                        </div>
+
+                        <div className="mt-2 space-y-1.5">
+                          {classStudents.length === 0 ? (
+                            <span className="text-xs text-[var(--color-text-muted)]">No students yet.</span>
+                          ) : (
+                            classStudents.map((s) => (
+                              <div key={`${classItem.id}-${s.studentEmail}`} className="rounded-lg border border-[rgba(65,90,119,0.16)] bg-white/80 px-2.5 py-2 text-sm text-[var(--color-text-secondary)]">
+                                {s.studentEmail}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {classDetailTab === 'groups' && (
+                      <div className="mt-4 rounded-xl border border-[rgba(65,90,119,0.2)] bg-white/65 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-[var(--color-text-primary)]">Student Groups</p>
+                          <Badge tone="neutral">{classGroups.length} groups</Badge>
+                        </div>
+                        <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                          Build reusable groups once, then assign groups to modules in one click.
+                        </p>
+
+                        <div className="mt-2 flex gap-2">
+                          <Input
+                            value={groupDraft}
+                            onChange={(e) => updateGroupDraft(classItem.id, e.target.value)}
+                            placeholder="Group name (e.g. Period 1, Intervention)"
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={!groupDraft.trim() || creatingGroupForClass === classItem.id}
+                            onClick={() => handleCreateGroup(classItem.id)}
+                          >
+                            {creatingGroupForClass === classItem.id ? 'Creating...' : 'Create Group'}
+                          </Button>
+                        </div>
+
+                        <div className="mt-3 space-y-2">
+                          {classGroups.length === 0 ? (
+                            <div className="rounded-lg border border-dashed border-[rgba(65,90,119,0.28)] bg-white/55 px-3 py-2.5 text-sm text-[var(--color-text-secondary)]">
+                              No groups yet. Create one, then add students to it.
                             </div>
-                            <Badge tone="neutral">Module</Badge>
-                          </div>
+                          ) : (
+                            classGroups.map((groupItem) => (
+                              <div key={groupItem.id} className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/75 p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-sm font-semibold text-[var(--color-text-primary)]">{groupItem.name}</p>
+                                  <Badge tone="brand">{(groupItem.members || []).length} students</Badge>
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {classStudents.length === 0 ? (
+                                    <span className="text-xs text-[var(--color-text-muted)]">Add students to roster first.</span>
+                                  ) : (
+                                    classStudents.map((studentRow) => {
+                                      const email = studentRow.studentEmail
+                                      const inGroup = (groupItem.members || []).includes(email)
+                                      return (
+                                        <Button
+                                          key={`${groupItem.id}-${email}`}
+                                          type="button"
+                                          size="sm"
+                                          variant={inGroup ? 'primary' : 'secondary'}
+                                          className="text-[0.74rem] px-2.5 py-1"
+                                          onClick={() => handleToggleStudentInGroup({ classId: classItem.id, groupItem, studentEmail: email })}
+                                        >
+                                          {inGroup ? `In Group: ${email}` : `Add: ${email}`}
+                                        </Button>
+                                      )
+                                    })
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
 
-                          <div className="mt-2.5 flex items-center gap-2">
-                            {code ? (
-                              <>
-                                <Badge tone="brand" className="font-mono tracking-[0.16em] text-[0.76rem] px-3 py-1.5">{code}</Badge>
-                                <Button type="button" variant="secondary" size="sm" onClick={() => handleCopyCode(code)}>
-                                  {copiedCode === code ? 'Copied' : 'Copy'}
-                                </Button>
-                              </>
-                            ) : (
+                    {classDetailTab === 'modules' && (
+                      <>
+                        <div className="mt-4 flex items-center justify-between">
+                          <p className="text-sm font-semibold text-[var(--color-text-primary)]">Modules</p>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => updateModuleDraft(classItem.id, { open: !draft.open })}
+                          >
+                            {draft.open ? 'Close' : '+ New Module'}
+                          </Button>
+                        </div>
+
+                        {draft.open && (
+                          <div className="mt-3 rounded-xl border border-[rgba(65,90,119,0.22)] bg-white/80 p-3">
+                            <div className="grid grid-cols-1 gap-2">
+                              <Input
+                                value={draft.name}
+                                onChange={(e) => updateModuleDraft(classItem.id, { name: e.target.value })}
+                                placeholder="Module name"
+                              />
+                              <Input
+                                value={draft.description}
+                                onChange={(e) => updateModuleDraft(classItem.id, { description: e.target.value })}
+                                placeholder="Module description (optional)"
+                              />
                               <Button
                                 type="button"
                                 variant="primary"
                                 size="sm"
-                                onClick={() => handleGenerateCode(moduleItem, classItem.id)}
-                                disabled={isGenerating}
+                                className="w-fit"
+                                disabled={!draft.name.trim() || creatingModuleForClass === classItem.id}
+                                onClick={() => handleCreateModuleForClass(classItem.id)}
                               >
-                                {isGenerating ? 'Generating...' : 'Generate Code'}
+                                {creatingModuleForClass === classItem.id ? 'Creating...' : 'Create Module'}
                               </Button>
-                            )}
+                            </div>
                           </div>
+                        )}
+
+                        <div className="mt-3 space-y-2">
+                          {classModules.length === 0 ? (
+                            <div className="rounded-lg border border-dashed border-[rgba(65,90,119,0.28)] bg-white/55 px-3 py-2.5 text-sm text-[var(--color-text-secondary)]">
+                              No modules yet for this class.
+                            </div>
+                          ) : (
+                            classModules.map((moduleItem) => {
+                              const assignedGroups = moduleGroupAccess[moduleGroupKey(classItem.id, moduleItem.id)] || []
+                              const allowedEmails = new Set(
+                                classGroups
+                                  .filter((groupItem) => assignedGroups.includes(groupItem.id))
+                                  .flatMap((groupItem) => Array.isArray(groupItem.members) ? groupItem.members : [])
+                                  .filter(Boolean),
+                              )
+
+                              return (
+                                <div key={moduleItem.id} className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 p-3">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{moduleItem.name}</p>
+                                      {moduleItem.description && (
+                                        <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 line-clamp-2">{moduleItem.description}</p>
+                                      )}
+                                    </div>
+                                    <Badge tone="neutral">Module</Badge>
+                                  </div>
+
+                                  <div className="mt-2.5 flex items-center gap-2">
+                                    <Badge tone="neutral">
+                                      {allowedEmails.size} unlocked
+                                    </Badge>
+                                  </div>
+
+                                  <div className="mt-2.5">
+                                    <p className="text-[0.72rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)] mb-1.5">
+                                      Assign Groups
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {classGroups.length === 0 ? (
+                                        <span className="text-xs text-[var(--color-text-muted)]">Create groups first in the Groups tab.</span>
+                                      ) : (
+                                        classGroups.map((groupItem) => {
+                                          const selected = assignedGroups.includes(groupItem.id)
+                                          return (
+                                            <Button
+                                              key={`${moduleItem.id}-${groupItem.id}`}
+                                              type="button"
+                                              variant={selected ? 'primary' : 'secondary'}
+                                              size="sm"
+                                              className="text-[0.74rem] px-2.5 py-1"
+                                              onClick={() => handleToggleGroupForModule({
+                                                classId: classItem.id,
+                                                moduleItem,
+                                                groupId: groupItem.id,
+                                              })}
+                                            >
+                                              {selected ? `Assigned: ${groupItem.name}` : `Assign: ${groupItem.name}`}
+                                            </Button>
+                                          )
+                                        })
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {classStudents.length > 0 && (
+                                    <div className="mt-3 rounded-lg border border-[rgba(65,90,119,0.16)] bg-[rgba(248,249,250,0.76)] p-2.5">
+                                      <p className="text-[0.72rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)] mb-1.5">
+                                        Individual Overrides
+                                      </p>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {classStudents.map((studentRow) => {
+                                          const email = studentRow.studentEmail
+                                          const key = moduleStudentKey(classItem.id, moduleItem.id, email)
+                                          const access = moduleAccessByKey[key]
+                                          const groupDerivedUnlocked = classGroups
+                                            .filter((groupItem) => assignedGroups.includes(groupItem.id))
+                                            .some((groupItem) => (groupItem.members || []).includes(email))
+                                          const unlocked = access?.source === 'manual'
+                                            ? Boolean(access?.isUnlocked)
+                                            : groupDerivedUnlocked
+                                          const prefix = access?.source === 'manual' ? 'Manual' : 'Group'
+                                          return (
+                                            <Button
+                                              key={`${moduleItem.id}-manual-${email}`}
+                                              type="button"
+                                              size="sm"
+                                              variant={unlocked ? 'primary' : 'secondary'}
+                                              className="text-[0.74rem] px-2.5 py-1"
+                                              onClick={() => handleToggleIndividualModuleAccess({
+                                                classId: classItem.id,
+                                                moduleItem,
+                                                studentEmail: email,
+                                              })}
+                                            >
+                                              {`${prefix}: ${email}`}
+                                            </Button>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })
+                          )}
                         </div>
-                      )
-                    })
-                  )}
+                      </>
+                    )}
+                  </Card>
                 </div>
-              </Card>
-            )
-          })}
-        </div>
+              )
+            })()
+          )}
+        </>
       )}
     </Panel>
   )
@@ -538,7 +1168,62 @@ function ClassManagementPanel({ currentUser }) {
 
 export default function TeacherDashboard({ onLogout, currentUser }) {
   const [activeTab, setActiveTab] = useState('overview')
+  const [overviewStats, setOverviewStats] = useState({
+    activeStudents: '--',
+    modules: '--',
+    classes: '--',
+    insights: '0',
+  })
   const firstName = currentUser?.displayName?.split(' ')[0] || null
+
+  useEffect(() => {
+    const loadOverviewStats = async () => {
+      if (!currentUser?.uid) return
+
+      try {
+        const [moduleRes, classesSnap, studentsSnap, classModulesSnap] = await Promise.all([
+          fetch(`http://localhost:8000/modules?teacher_uid=${encodeURIComponent(currentUser.uid)}`),
+          getDocs(query(collection(db, 'teacherClasses'), where('teacherUid', '==', currentUser.uid))),
+          getDocs(query(collection(db, 'classStudents'), where('teacherUid', '==', currentUser.uid))),
+          getDocs(query(collection(db, 'classModules'), where('teacherUid', '==', currentUser.uid))),
+        ])
+
+        const moduleData = await moduleRes.json()
+        const knownModules = Array.isArray(moduleData) ? moduleData : []
+        const knownModuleIds = new Set(knownModules.map((m) => m.id).filter(Boolean))
+        const linkedModuleIds = new Set(
+          classModulesSnap.docs
+            .map((d) => d.data()?.moduleId)
+            .filter((moduleId) => moduleId && (!knownModuleIds.size || knownModuleIds.has(moduleId))),
+        )
+        const modulesCount = linkedModuleIds.size
+        const classesCount = classesSnap.size
+        const uniqueStudents = new Set(
+          studentsSnap.docs
+            .map((d) => d.data())
+            .map((row) => row.studentUid || row.studentEmail)
+            .filter(Boolean),
+        ).size
+        const insightsCount = 0
+
+        setOverviewStats({
+          activeStudents: String(uniqueStudents),
+          modules: String(modulesCount),
+          classes: String(classesCount),
+          insights: String(insightsCount),
+        })
+      } catch {
+        setOverviewStats({
+          activeStudents: '--',
+          modules: '--',
+          classes: '--',
+          insights: '0',
+        })
+      }
+    }
+
+    loadOverviewStats()
+  }, [currentUser?.uid, activeTab])
 
   return (
     <div className="min-h-screen relative overflow-x-hidden bg-[var(--color-bg-canvas)]">
@@ -581,7 +1266,7 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
                   size="md"
                   className={activeTab === 'overview'
                     ? 'bg-white text-[var(--color-primary-700)] border-white/90 shadow-[0_10px_20px_rgba(15,23,42,0.28)] justify-start'
-                    : 'justify-start font-medium text-white bg-[rgba(236,241,246,0.1)] border border-white/20 hover:bg-[rgba(236,241,246,0.18)]'
+                    : 'justify-start font-medium text-white bg-[rgba(236,241,246,0.1)] border border-white/20 hover:bg-[rgba(236,241,246,0.18)] hover:text-[var(--color-primary-700)]'
                   }
                 >
                   Overview
@@ -592,7 +1277,7 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
                   size="md"
                   className={activeTab === 'analytics'
                     ? 'bg-white text-[var(--color-primary-700)] border-white/90 shadow-[0_10px_20px_rgba(15,23,42,0.28)] justify-start'
-                    : 'justify-start font-medium text-white bg-[rgba(236,241,246,0.1)] border border-white/20 hover:bg-[rgba(236,241,246,0.18)]'
+                    : 'justify-start font-medium text-white bg-[rgba(236,241,246,0.1)] border border-white/20 hover:bg-[rgba(236,241,246,0.18)] hover:text-[var(--color-primary-700)]'
                   }
                 >
                   Analytics
@@ -603,7 +1288,7 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
                   size="md"
                   className={activeTab === 'classes'
                     ? 'bg-white text-[var(--color-primary-700)] border-white/90 shadow-[0_10px_20px_rgba(15,23,42,0.28)] justify-start'
-                    : 'justify-start font-medium text-white bg-[rgba(236,241,246,0.1)] border border-white/20 hover:bg-[rgba(236,241,246,0.18)]'
+                    : 'justify-start font-medium text-white bg-[rgba(236,241,246,0.1)] border border-white/20 hover:bg-[rgba(236,241,246,0.18)] hover:text-[var(--color-primary-700)]'
                   }
                 >
                   Class Management
@@ -622,10 +1307,10 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
             ) : (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                  <DashboardStat label="Active Students" value="--" tone="blue" />
-                  <DashboardStat label="Modules" value="--" tone="purple" />
-                  <DashboardStat label="Documents" value="--" tone="amber" />
-                  <DashboardStat label="Chat Sessions" value="--" tone="green" />
+                  <DashboardStat label="Active Students" value={overviewStats.activeStudents} tone="blue" />
+                  <DashboardStat label="Modules" value={overviewStats.modules} tone="purple" />
+                  <DashboardStat label="Classes" value={overviewStats.classes} tone="amber" />
+                  <DashboardStat label="Insights" value={overviewStats.insights} tone="green" />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">

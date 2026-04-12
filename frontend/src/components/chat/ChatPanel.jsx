@@ -54,31 +54,34 @@ const QUICK_ACTIONS = CHAT_COPY.quickActions.map((action, index) => ({
 function StudentEmptyState({ greeting, onQuickAction }) {
   return (
     <div className="flex flex-col items-center justify-center h-full px-6 py-12 select-none">
-      <LogoMark containerClassName="w-16 h-16 rounded-2xl bg-indigo-50 border border-[var(--color-brand-100)] mb-6 p-1" />
+      <Card className="w-full max-w-4xl p-7 md:p-8 border-[rgba(65,90,119,0.22)] bg-[linear-gradient(145deg,rgba(248,249,250,0.95),rgba(232,240,249,0.86))] shadow-[0_18px_36px_rgba(27,38,59,0.14)]">
+        <div className="flex flex-col items-center">
+          <LogoMark containerClassName="w-16 h-16 rounded-2xl bg-[var(--color-brand-50)] border border-[var(--color-brand-100)] mb-5 p-1" />
+          <h2 className="text-3xl font-semibold text-[var(--color-text-primary)] text-center mb-2">{greeting}</h2>
+          <p className="text-[var(--color-text-secondary)] text-sm text-center mb-7 max-w-sm">
+            {CHAT_COPY.emptyStateHelp}
+          </p>
+        </div>
 
-      <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">{greeting}</h2>
-      <p className="text-gray-500 text-sm text-center mb-8 max-w-sm">
-        {CHAT_COPY.emptyStateHelp}
-      </p>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full max-w-2xl">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 w-full">
         {QUICK_ACTIONS.map((action) => (
           <Card
             key={action.title}
             interactive
-            className="flex flex-col gap-2.5 p-4 text-left cursor-pointer"
+            className="flex flex-col gap-2.5 p-4 text-left cursor-pointer border-[rgba(65,90,119,0.2)] bg-white/80 hover:-translate-y-0.5 transition-all"
             onClick={() => onQuickAction(action.response)}
           >
             <div className={`w-8 h-8 rounded-lg ${action.iconBg} ${action.iconColor} flex items-center justify-center`}>
               {action.icon}
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-800">{action.title}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{action.subtitle}</p>
+              <p className="text-sm font-semibold text-[var(--color-text-primary)]">{action.title}</p>
+              <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">{action.subtitle}</p>
             </div>
           </Card>
         ))}
       </div>
+      </Card>
     </div>
   )
 }
@@ -160,15 +163,15 @@ function InputBar({ value, onChange, onSubmit, disabled }) {
   }
 
   return (
-    <div className="border-t border-gray-200 bg-white/80 backdrop-blur-sm px-4 py-4">
-      <form onSubmit={onSubmit} className="max-w-2xl mx-auto flex gap-2 items-center">
+    <div className="px-4 pb-4 pt-2">
+      <form onSubmit={onSubmit} className="max-w-3xl mx-auto flex gap-2 items-center rounded-[1.1rem] border border-[rgba(65,90,119,0.2)] bg-[rgba(248,249,250,0.88)] backdrop-blur-md px-3 py-2 shadow-[0_10px_24px_rgba(27,38,59,0.14)]">
         <Input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={CHAT_COPY.inputPlaceholder}
           disabled={disabled}
-          className="flex-1 rounded-[var(--radius-pill)] px-5 py-2.5 disabled:opacity-50"
+          className="flex-1 rounded-[var(--radius-pill)] px-5 py-2.5 disabled:opacity-50 bg-white/80 border-[rgba(65,90,119,0.22)]"
         />
         {speechSupported && (
           <button
@@ -182,7 +185,7 @@ function InputBar({ value, onChange, onSubmit, disabled }) {
               'flex-shrink-0 rounded-full p-2.5 border transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
               listening
                 ? 'border-red-300 bg-red-50 text-red-600 hover:bg-red-100'
-                : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50',
+                : 'border-[rgba(65,90,119,0.24)] bg-white/80 text-[var(--color-text-secondary)] hover:bg-white',
             ].join(' ')}
           >
             {listening ? (
@@ -215,12 +218,12 @@ function InputBar({ value, onChange, onSubmit, disabled }) {
 function TypingIndicator() {
   return (
     <div className="flex items-end gap-2">
-      <LogoMark containerClassName="w-8 h-8 rounded-full bg-indigo-600 border border-indigo-500 flex-shrink-0 shadow-sm p-0.5" imgClassName="rounded-full" />
-      <div className="bg-white border border-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+      <LogoMark containerClassName="w-8 h-8 rounded-full bg-[var(--color-primary-700)] border border-[rgba(255,255,255,0.4)] flex-shrink-0 shadow-sm p-0.5" imgClassName="rounded-full" />
+      <div className="bg-[rgba(248,249,250,0.9)] border border-[rgba(65,90,119,0.2)] rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
         <div className="flex gap-1.5 items-center h-3">
-          <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-          <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-          <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <span className="w-2 h-2 bg-[var(--color-brand-500)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+          <span className="w-2 h-2 bg-[var(--color-brand-500)] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+          <span className="w-2 h-2 bg-[var(--color-brand-500)] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
         </div>
       </div>
     </div>
@@ -294,17 +297,17 @@ export function Bubble({ message }) {
   return (
     <div className={`flex items-end gap-2 ${isStudent ? 'flex-row-reverse' : ''}`}>
       {!isStudent && (
-        <LogoMark containerClassName="w-8 h-8 rounded-full bg-indigo-600 border border-indigo-500 flex-shrink-0 shadow-sm p-0.5" imgClassName="rounded-full" />
+        <LogoMark containerClassName="w-8 h-8 rounded-full bg-[var(--color-primary-700)] border border-[rgba(255,255,255,0.38)] flex-shrink-0 shadow-sm p-0.5" imgClassName="rounded-full" />
       )}
 
       <div
         className={[
           'max-w-[75%] px-4 py-2.5 shadow-sm',
           isStudent
-            ? 'bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl rounded-br-sm'
+            ? 'bg-gradient-to-br from-[var(--color-brand-600)] to-[var(--color-brand-700)] rounded-2xl rounded-br-sm border border-[rgba(255,255,255,0.22)]'
             : message.isError
               ? 'bg-red-50 border border-red-200 rounded-2xl rounded-bl-sm'
-              : 'bg-white border border-gray-100 rounded-2xl rounded-bl-sm',
+              : 'bg-[rgba(248,249,250,0.9)] border border-[rgba(65,90,119,0.2)] rounded-2xl rounded-bl-sm',
         ].join(' ')}
       >
         {isStudent ? (
@@ -328,8 +331,8 @@ export function Bubble({ message }) {
           className={[
             'flex-shrink-0 self-end mb-1 rounded-full p-1.5 border transition-colors',
             speaking
-              ? 'border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-              : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-indigo-600',
+                ? 'border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+              : 'border-[rgba(65,90,119,0.2)] bg-white/80 text-[var(--color-text-muted)] hover:bg-white hover:text-[var(--color-brand-600)]',
           ].join(' ')}
         >
           {speaking ? (
@@ -445,11 +448,11 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, ses
 
   return (
     <>
-      <section className="flex-1 overflow-y-auto px-4 py-6">
+      <section className="flex-1 overflow-y-auto px-4 py-6 bg-[linear-gradient(160deg,rgba(248,249,250,0.96),rgba(231,239,248,0.78))]">
         {isStudentEmptyState ? (
           <StudentEmptyState greeting={greeting} onQuickAction={handleQuickAction} />
         ) : (
-          <div className="max-w-2xl mx-auto flex flex-col gap-4">
+          <div className="max-w-3xl mx-auto flex flex-col gap-4">
             {messages.map((msg, i) => (
               <Bubble key={i} message={msg} />
             ))}
@@ -466,7 +469,7 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, ses
         disabled={loading}
       />
       {userType === 'student' && (
-        <p className="text-center text-xs text-gray-400 pb-2 px-4">
+        <p className="text-center text-xs text-[var(--color-text-muted)] pb-2 px-4">
           {CHAT_COPY.reviewNotice}
         </p>
       )}

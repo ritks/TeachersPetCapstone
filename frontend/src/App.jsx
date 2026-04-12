@@ -5,10 +5,13 @@ import EntryPage from './components/EntryPage'
 import ChatPanel, { WELCOME_MESSAGE } from './components/chat/ChatPanel'
 import LoadingSpinner from './components/common/LoadingSpinner'
 import StudentSidebar from './components/student/StudentSidebar'
+import StudentDashboard from './components/student/StudentDashboard'
 import TeacherDashboard from './components/teacher/TeacherDashboard'
 import { Button } from './components/ui/primitives'
 
 const NAV_STATE_KEY = 'tpNav'
+const NAV_STUDENT_MODE_KEY = 'tpStudentMode'
+const NAV_STUDENT_MODULE_KEY = 'tpStudentModule'
 
 const APP_VIEWS = {
   ENTRY: 'entry',
@@ -20,7 +23,7 @@ function getAppView({ userType, currentUser, studentData, authLoading }) {
   if (authLoading) return null
   if (userType === null) return APP_VIEWS.ENTRY
   if (userType === 'teacher' && !currentUser) return APP_VIEWS.ENTRY
-  if (userType === 'student' && !studentData) return APP_VIEWS.ENTRY
+  if (userType === 'student' && !currentUser && !studentData) return APP_VIEWS.ENTRY
   if (userType === 'teacher') return APP_VIEWS.TEACHER
   return APP_VIEWS.STUDENT
 }
@@ -66,28 +69,38 @@ function makeNewSession() {
 }
 
 export default function App() {
-  const { currentUser, authLoading, logout } = useAuth()
+  const { currentUser, currentUserRole, authLoading, logout } = useAuth()
 
   const [userType, setUserType] = useState(null)
   const [studentData, setStudentData] = useState(null)
+  const [selectedStudentModule, setSelectedStudentModule] = useState(null)
   const didInitRef = useRef(false)
   const handlingPopRef = useRef(false)
-  const lastViewRef = useRef(null)
+  const lastNavRef = useRef(null)
 
   useEffect(() => {
     if (authLoading || didInitRef.current) return
     didInitRef.current = true
 
+    if (currentUser) {
+      setUserType(currentUserRole === 'student' ? 'student' : 'teacher')
+      return
+    }
+
     const data = loadStoredStudent()
     if (data) {
       setStudentData(data)
       setUserType('student')
-      return
     }
-    if (currentUser) {
-      setUserType('teacher')
+  }, [authLoading, currentUser, currentUserRole])
+
+  useEffect(() => {
+    if (!currentUser) return
+    if (currentUserRole === 'student') {
+      setSelectedStudentModule(null)
+      setStudentData(null)
     }
-  }, [authLoading, currentUser])
+  }, [currentUser, currentUserRole])
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
@@ -101,14 +114,25 @@ export default function App() {
       switch (view) {
         case APP_VIEWS.ENTRY:
           setUserType(null)
+          setSelectedStudentModule(null)
           break
         case APP_VIEWS.TEACHER:
           setUserType('teacher')
+          setSelectedStudentModule(null)
           break
         case APP_VIEWS.STUDENT: {
-          const data = loadStoredStudent()
-          setStudentData(data)
           setUserType('student')
+          const studentMode = event.state?.[NAV_STUDENT_MODE_KEY] || 'dashboard'
+          const studentModule = event.state?.[NAV_STUDENT_MODULE_KEY] || null
+          const hasExplicitStudentNav = Object.prototype.hasOwnProperty.call(event.state || {}, NAV_STUDENT_MODE_KEY)
+          if (hasExplicitStudentNav) {
+            setSelectedStudentModule(studentMode === 'module' ? studentModule : null)
+          } else {
+            // Legacy guest-student flow (course-code session without auth).
+            const data = loadStoredStudent()
+            setStudentData(data)
+            setSelectedStudentModule(null)
+          }
           break
         }
         default:
@@ -126,25 +150,35 @@ export default function App() {
     if (typeof window === 'undefined') return
     if (appView === null || !didInitRef.current) return
 
+    const isStudentNav = appView === APP_VIEWS.STUDENT && !!currentUser
+    const studentMode = isStudentNav ? (selectedStudentModule ? 'module' : 'dashboard') : null
     const state = { ...(window.history.state || {}), [NAV_STATE_KEY]: appView }
+    if (isStudentNav) {
+      state[NAV_STUDENT_MODE_KEY] = studentMode
+      state[NAV_STUDENT_MODULE_KEY] = selectedStudentModule || null
+    }
+    const navToken = isStudentNav ? `${appView}:${studentMode}` : appView
 
-    if (lastViewRef.current === null) {
+    if (lastNavRef.current === null) {
       window.history.replaceState(state, '', window.location.href)
-      lastViewRef.current = appView
+      lastNavRef.current = navToken
       return
     }
 
     if (handlingPopRef.current) {
       handlingPopRef.current = false
-      lastViewRef.current = appView
+      lastNavRef.current = navToken
       return
     }
 
-    if (appView !== lastViewRef.current) {
+    if (navToken !== lastNavRef.current) {
       window.history.pushState(state, '', window.location.href)
-      lastViewRef.current = appView
+      lastNavRef.current = navToken
+    } else if (isStudentNav && studentMode === 'module') {
+      // Keep module payload in sync without stacking history entries.
+      window.history.replaceState(state, '', window.location.href)
     }
-  }, [appView])
+  }, [appView, currentUser, selectedStudentModule])
 
   if (authLoading) return <LoadingSpinner />
 
@@ -153,8 +187,7 @@ export default function App() {
       <EntryPage
         onStudentEntry={() => {}}
         onTeacherEntry={() => {}}
-        onStudentAuthSuccess={(data) => {
-          setStudentData(data)
+        onStudentAuthSuccess={() => {
           setUserType('student')
         }}
         onTeacherAuthSuccess={() => setUserType('teacher')}
@@ -163,12 +196,13 @@ export default function App() {
   }
 
   const handleLogout = async () => {
-    if (userType === 'teacher') {
+    if (currentUser) {
       await logout()
     } else {
       localStorage.removeItem('tp_student')
       setStudentData(null)
     }
+    setSelectedStudentModule(null)
     setUserType(null)
   }
 
@@ -181,27 +215,42 @@ export default function App() {
     )
   }
 
-  return (
-    <StudentApp
-      studentData={studentData}
-      onLogout={handleLogout}
-    />
-  )
+  if (currentUser) {
+    if (selectedStudentModule) {
+      return (
+        <StudentApp
+          studentData={selectedStudentModule}
+          onLogout={handleLogout}
+          onBack={() => setSelectedStudentModule(null)}
+        />
+      )
+    }
+    return (
+      <StudentDashboard
+        currentUser={currentUser}
+        onOpenModule={(module) => setSelectedStudentModule(module)}
+        onLogout={handleLogout}
+      />
+    )
+  }
+
+  return <StudentApp studentData={studentData} onLogout={handleLogout} />
 }
 
 function TeacherApp({ currentUser, onLogout }) {
   return <TeacherDashboard onLogout={onLogout} currentUser={currentUser} />
 }
 
-function StudentApp({ studentData, onLogout }) {
+function StudentApp({ studentData, onLogout, onBack = null }) {
+  const storageKey = studentData.courseCode || `${studentData.classId || 'class'}_${studentData.moduleId}`
   const initRef = useRef(null)
   if (!initRef.current) {
-    const stored = loadStudentSessions(studentData.courseCode)
+    const stored = loadStudentSessions(storageKey)
     if (stored.length > 0) {
       initRef.current = { sessions: stored, activeId: stored[0].id }
     } else {
       const first = makeNewSession()
-      saveStudentSessions(studentData.courseCode, [first])
+      saveStudentSessions(storageKey, [first])
       initRef.current = { sessions: [first], activeId: first.id }
     }
   }
@@ -216,7 +265,7 @@ function StudentApp({ studentData, onLogout }) {
     const session = makeNewSession()
     const updated = [session, ...sessions]
     setSessions(updated)
-    saveStudentSessions(studentData.courseCode, updated)
+    saveStudentSessions(storageKey, updated)
     setActiveSessionId(session.id)
   }
 
@@ -230,7 +279,7 @@ function StudentApp({ studentData, onLogout }) {
           : s.title
         return { ...s, messages: msgs, backendSessionId: backendSid ?? s.backendSessionId, title }
       })
-      saveStudentSessions(studentData.courseCode, updated)
+      saveStudentSessions(storageKey, updated)
       return updated
     })
   }
@@ -238,7 +287,7 @@ function StudentApp({ studentData, onLogout }) {
   const handleRenameSession = (sessionId, newTitle) => {
     setSessions((prev) => {
       const updated = prev.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s))
-      saveStudentSessions(studentData.courseCode, updated)
+      saveStudentSessions(storageKey, updated)
       return updated
     })
   }
@@ -256,13 +305,13 @@ function StudentApp({ studentData, onLogout }) {
           setActiveSessionId(fresh.id)
         }
       }
-      saveStudentSessions(studentData.courseCode, updated)
+      saveStudentSessions(storageKey, updated)
       return updated
     })
   }
 
   return (
-    <div className="flex flex-row h-screen bg-gray-50">
+    <div className="flex flex-row h-screen bg-[linear-gradient(145deg,rgba(248,249,250,0.96),rgba(227,236,247,0.82))]">
       <StudentSidebar
         sessions={sessions}
         activeSessionId={activeSessionId}
@@ -270,13 +319,20 @@ function StudentApp({ studentData, onLogout }) {
         onNewSession={handleNewSession}
         onRenameSession={handleRenameSession}
         onDeleteSession={handleDeleteSession}
-        courseCode={studentData.courseCode}
+        courseCode={studentData.courseCode || 'ENROLLED'}
         moduleName={studentData.moduleName}
         teacherName={teacherName}
         onLogout={onLogout}
       />
-      <div className="flex flex-col flex-1 min-w-0 bg-white">
-        <div className="flex items-center justify-end px-4 py-2 border-b border-gray-100 flex-shrink-0">
+      <div className="flex flex-col flex-1 min-w-0 bg-transparent">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-[rgba(65,90,119,0.18)] bg-[rgba(248,249,250,0.82)] backdrop-blur-sm flex-shrink-0">
+          <div>
+            {onBack && (
+              <Button onClick={onBack} variant="secondary" size="sm">
+                Back to Dashboard
+              </Button>
+            )}
+          </div>
           <Button
             onClick={onLogout}
             variant="ghost"

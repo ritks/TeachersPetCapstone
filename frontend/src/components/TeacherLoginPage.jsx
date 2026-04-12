@@ -19,9 +19,9 @@ export default function TeacherLoginPage({ onSuccess, embedded = false }) {
     setLoading(true)
     try {
       if (mode === 'signin') {
-        await login(email, password)
+        await login(email, password, 'teacher')
       } else {
-        await register(email, password, displayName.trim() || undefined)
+        await register(email, password, displayName.trim() || undefined, 'teacher')
       }
       onSuccess()
     } catch (err) {
@@ -35,7 +35,7 @@ export default function TeacherLoginPage({ onSuccess, embedded = false }) {
     setError('')
     setLoading(true)
     try {
-      await loginWithGoogle()
+      await loginWithGoogle('teacher')
       onSuccess()
     } catch (err) {
       setError(friendlyError(err.code))

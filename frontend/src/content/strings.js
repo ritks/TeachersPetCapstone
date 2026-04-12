@@ -27,6 +27,19 @@ export const STUDENT_ENTRY_COPY = {
   verifyError: 'Could not verify the code. Please check your connection and try again.',
 }
 
+export const STUDENT_LOGIN_COPY = {
+  title: 'Student Portal',
+  subtitle: 'Sign in to access your enrolled classes',
+  signIn: 'Sign In',
+  createAccount: 'Create Account',
+  emailPlaceholder: 'Email address',
+  passwordPlaceholder: 'Password',
+  displayNamePlaceholder: 'Your name',
+  wait: 'Please wait...',
+  googleSignIn: 'Sign in with Google',
+  or: 'or',
+}
+
 export const TEACHER_LOGIN_COPY = {
   title: 'Teacher Portal',
   subtitle: 'Sign in to manage your modules',

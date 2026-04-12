@@ -2,7 +2,7 @@ import { APP_COPY, ENTRY_COPY } from '../content/strings'
 import { AppShell, Card } from './ui/primitives'
 import LogoMark from './common/LogoMark'
 import { useState } from 'react'
-import StudentEntryPage from './StudentEntryPage'
+import StudentLoginPage from './StudentLoginPage'
 import TeacherLoginPage from './TeacherLoginPage'
 import studentPfpIcon from '../assets/studentPFP.png'
 import teacherPfpIcon from '../assets/teacherPFP.png'
@@ -65,9 +65,9 @@ export default function EntryPage({
               })()}
               {expanded === 'student' && onStudentAuthSuccess && (
                 <div className="tp-sheet-enter pt-1">
-                  <StudentEntryPage
+                  <StudentLoginPage
                     embedded
-                    onSuccess={(data) => onStudentAuthSuccess?.(data)}
+                    onSuccess={() => onStudentAuthSuccess?.()}
                   />
                 </div>
               )}
