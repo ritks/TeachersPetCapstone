@@ -4,17 +4,17 @@ import userEvent from '@testing-library/user-event'
 import EntryPage from './EntryPage'
 
 describe('EntryPage', () => {
-  it('should render the page title and subtitle', () => {
-    render(<EntryPage onStudentEntry={() => {}} onTeacherEntry={() => {}} onGuestEntry={() => {}} />)
-    expect(screen.getByText("Teacher's Pet")).toBeInTheDocument()
-    expect(screen.getByText('AI-Powered Math Tutor')).toBeInTheDocument()
+  it('should render updated marketing copy', () => {
+    render(<EntryPage onStudentEntry={() => {}} onTeacherEntry={() => {}} />)
+    expect(screen.getByText(/log in to your classroom/i)).toBeInTheDocument()
+    expect(screen.getByText(/where every math problem becomes an aha moment/i)).toBeInTheDocument()
   })
 
-  it('should render three entry option buttons', () => {
-    render(<EntryPage onStudentEntry={() => {}} onTeacherEntry={() => {}} onGuestEntry={() => {}} />)
+  it('should render only student and teacher entry buttons', () => {
+    render(<EntryPage onStudentEntry={() => {}} onTeacherEntry={() => {}} />)
     expect(screen.getByRole('button', { name: /i'm a student/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /i'm a teacher/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /just chat/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /just chat/i })).not.toBeInTheDocument()
   })
 
   it('should call onStudentEntry when student button is clicked', async () => {
@@ -24,7 +24,6 @@ describe('EntryPage', () => {
       <EntryPage
         onStudentEntry={onStudentEntry}
         onTeacherEntry={() => {}}
-        onGuestEntry={() => {}}
       />
     )
     
@@ -40,7 +39,6 @@ describe('EntryPage', () => {
       <EntryPage
         onStudentEntry={() => {}}
         onTeacherEntry={onTeacherEntry}
-        onGuestEntry={() => {}}
       />
     )
 
@@ -49,19 +47,4 @@ describe('EntryPage', () => {
     expect(onTeacherEntry).toHaveBeenCalledOnce()
   })
 
-  it('should call onGuestEntry when guest button is clicked', async () => {
-    const user = userEvent.setup()
-    const onGuestEntry = vi.fn()
-    render(
-      <EntryPage
-        onStudentEntry={() => {}}
-        onTeacherEntry={() => {}}
-        onGuestEntry={onGuestEntry}
-      />
-    )
-
-    const guestButton = screen.getByRole('button', { name: /just chat/i })
-    await user.click(guestButton)
-    expect(onGuestEntry).toHaveBeenCalledOnce()
-  })
 })
