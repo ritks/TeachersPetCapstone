@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { STUDENT_LOGIN_COPY } from '../content/strings'
 import { AppShell, Button, Input, Panel } from './ui/primitives'
@@ -6,6 +7,7 @@ import LogoMark from './common/LogoMark'
 
 export default function StudentLoginPage({ onSuccess, embedded = false }) {
   const { login, register, loginWithGoogle } = useAuth()
+  const navigate = useNavigate()
   const [mode, setMode] = useState('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -24,6 +26,7 @@ export default function StudentLoginPage({ onSuccess, embedded = false }) {
         await register(email, password, displayName.trim() || undefined, 'student')
       }
       onSuccess?.()
+      navigate('/student')
     } catch (err) {
       setError(friendlyError(err.code))
     } finally {
@@ -37,6 +40,7 @@ export default function StudentLoginPage({ onSuccess, embedded = false }) {
     try {
       await loginWithGoogle('student')
       onSuccess?.()
+      navigate('/student')
     } catch (err) {
       setError(friendlyError(err.code))
     } finally {

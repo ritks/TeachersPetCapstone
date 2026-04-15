@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { Badge, Button, Card, Panel } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
+import { useStudent } from '../../contexts/StudentContext'
 
 function keyFor(classId, moduleId) {
   return `${classId}::${moduleId}`
 }
 
-export default function StudentDashboard({ currentUser, onOpenModule, onLogout }) {
+export default function StudentDashboard({ currentUser, onLogout }) {
+  const navigate = useNavigate()
+  const { registerModule } = useStudent()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [classCards, setClassCards] = useState([])
@@ -271,13 +275,17 @@ export default function StudentDashboard({ currentUser, onOpenModule, onLogout }
                         variant={module.unlocked ? 'primary' : 'secondary'}
                         size="sm"
                         disabled={!module.unlocked}
-                        onClick={() => onOpenModule({
-                          classId: classCard.id,
-                          moduleId: module.moduleId,
-                          moduleName: module.moduleName,
-                          teacherName: classCard.teacherName || null,
-                          courseCode: module.courseCode || 'ENROLLED',
-                        })}
+                        onClick={() => {
+                          const moduleData = {
+                            classId: classCard.id,
+                            moduleId: module.moduleId,
+                            moduleName: module.moduleName,
+                            teacherName: classCard.teacherName || null,
+                            courseCode: module.courseCode || 'ENROLLED',
+                          }
+                          registerModule(module.moduleId, moduleData)
+                          navigate(`/student/module/${module.moduleId}`)
+                        }}
                       >
                         {module.unlocked ? 'Open Module' : 'Locked'}
                       </Button>

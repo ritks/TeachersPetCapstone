@@ -1,11 +1,15 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { STUDENT_ENTRY_COPY } from '../content/strings'
 import { AppShell, Button, Input, Panel } from './ui/primitives'
 import LogoMark from './common/LogoMark'
+import { useStudent } from '../contexts/StudentContext'
 
 export default function StudentEntryPage({ onSuccess, embedded = false }) {
+  const navigate = useNavigate()
+  const { setStudentData } = useStudent()
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -25,8 +29,9 @@ export default function StudentEntryPage({ onSuccess, embedded = false }) {
       }
       const { moduleId, moduleName, teacherUid, teacherName } = snap.data()
       const studentData = { courseCode: trimmed, moduleId, moduleName, teacherUid: teacherUid ?? null, teacherName: teacherName ?? null }
-      localStorage.setItem('tp_student', JSON.stringify(studentData))
-      onSuccess(studentData)
+      setStudentData(studentData)
+      onSuccess?.(studentData)
+      navigate('/student')
     } catch {
       setError(STUDENT_ENTRY_COPY.verifyError)
     } finally {
