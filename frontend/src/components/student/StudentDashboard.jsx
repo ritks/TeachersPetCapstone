@@ -173,7 +173,7 @@ export default function StudentDashboard({ currentUser, onLogout }) {
           }
         })
         setClassCards(cards)
-      } catch (e) {
+      } catch {
         setError('Could not fully load your student dashboard. Some class data may be restricted by current Firebase rules.')
       } finally {
         setLoading(false)

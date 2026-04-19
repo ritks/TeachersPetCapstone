@@ -16,7 +16,7 @@ function loadStoredStudent() {
 }
 
 export function StudentProvider({ children }) {
-  const { currentUser, currentUserRole } = useAuth()
+  const { currentUser } = useAuth()
   const [studentData, setStudentDataState] = useState(() => loadStoredStudent())
   const [selectedStudentModule, setSelectedStudentModule] = useState(null)
   // Registry maps moduleId → full module object for authenticated student navigation
