@@ -24,8 +24,7 @@ jobs:
       run: npm install --legacy-peer-deps
     
     - name: Run linter
-      continue-on-error: true
-      run: npm run lint || true
+      run: npm run lint
     
     - name: Run unit tests
       run: npm run test -- --run --coverage
@@ -69,7 +68,6 @@ jobs:
       run: npx playwright install --with-deps
     
     - name: Run E2E tests
-      continue-on-error: true  # E2E tests may fail in CI without real Firebase credentials
       run: npm run test:e2e -- --timeout=30000
       env:
         CI: true
