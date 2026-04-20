@@ -62,7 +62,7 @@ Comprehensive backend testing workflow for Python code.
 1. Checkout code
 2. Set up Python 3.11 with cached pip dependencies
 3. Install project dependencies and pytest packages
-4. Run linter (pylint) - non-blocking
+4. Run linter (pylint) - non-blocking (`continue-on-error: true`, only runs if pylint is installed)
 5. Run pytest with coverage reporting (XML + HTML)
 6. Upload coverage to Codecov
 7. Archive test results (.pytest_cache)
@@ -95,10 +95,11 @@ Runs Vitest tests with coverage reporting.
 1. Checkout code
 2. Set up Node.js 20 with cached npm dependencies
 3. Install dependencies with `--legacy-peer-deps`
-4. Run ESLint (non-blocking)
-5. Run Vitest with coverage
-6. Upload coverage to Codecov
-7. Archive coverage results
+4. Run ESLint (blocking — fails CI on lint errors)
+5. Build verification (`npm run build` — fails CI if production bundle fails)
+6. Run Vitest with coverage
+7. Upload coverage to Codecov
+8. Archive coverage results
 
 **Artifacts:**
 - `coverage-frontend`: Coverage reports (30 days retention)
@@ -123,8 +124,6 @@ Runs Playwright end-to-end tests in Chromium.
 - `VITE_FIREBASE_STORAGE_BUCKET`
 - `VITE_FIREBASE_MESSAGING_SENDER_ID`
 - `VITE_FIREBASE_APP_ID`
-
-**Note:** E2E tests run with `continue-on-error: true` due to mock Firebase credentials.
 
 **Artifacts:**
 - `playwright-report`: HTML test report (30 days retention)
@@ -161,10 +160,9 @@ Artifacts are retained for 30 days:
 - Mock Firebase configuration (all `VITE_FIREBASE_*` keys with test values)
 
 ### Test Configuration
-- **Backend**: 83 tests with pytest and PostgreSQL
-- **Frontend Unit**: 5 tests with Vitest
-- **Frontend E2E**: 26 Chromium tests with Playwright
-- **Total**: 114 tests
+- **Backend**: pytest with PostgreSQL
+- **Frontend Unit**: Vitest
+- **Frontend E2E**: Chromium via Playwright
 
 ## Security
 
@@ -228,25 +226,19 @@ export GITHUB_TOKEN=mock-github-token-for-ci-testing
 python -m pytest tests/ -v --cov=. --cov-report=xml --cov-report=html
 ```
 
-**Frontend Unit Tests:**
+**Frontend (all checks — mirrors CI exactly):**
 ```bash
 cd frontend
 npm install --legacy-peer-deps
-npm run test -- --run --coverage
+npm run pr-check   # lint → build → unit tests → e2e tests
 ```
 
-**Frontend E2E Tests:**
+Or run steps individually:
 ```bash
-cd frontend
-# Set mock Firebase environment variables
-export VITE_FIREBASE_API_KEY=mock-api-key-for-ci
-export VITE_FIREBASE_AUTH_DOMAIN=mock-project.firebaseapp.com
-export VITE_FIREBASE_PROJECT_ID=mock-project
-export VITE_FIREBASE_STORAGE_BUCKET=mock-project.appspot.com
-export VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
-export VITE_FIREBASE_APP_ID=1:123456789:web:abc123def456
-# Run E2E tests
-npm run test:e2e -- --timeout=30000
+npm run lint                   # ESLint
+npm run build                  # Production build verification
+npm run test -- --run          # Vitest unit tests
+npm run test:e2e               # Playwright E2E tests
 ```
 
 ## Customization
@@ -329,7 +321,6 @@ Download artifacts from the Actions tab:
 - Review test logs for slow operations
 
 ### E2E tests failing
-- E2E tests run with `continue-on-error: true` due to mock Firebase
 - Check mock environment variables are set correctly
 - Verify Playwright browsers are installed: `npx playwright install --with-deps`
 - Run locally with same mock env vars to reproduce

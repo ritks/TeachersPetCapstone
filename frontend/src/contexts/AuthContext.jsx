@@ -69,6 +69,7 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password, roleHint = null) => {
     const cred = await signInWithEmailAndPassword(auth, email, password)
+    setCurrentUser(cred.user)
     const profile = await _saveUserDoc(cred.user, roleHint)
     setCurrentUserRole(profile?.role || null)
     setCurrentUserProfile(profile)
@@ -80,6 +81,7 @@ export function AuthProvider({ children }) {
     if (displayName) {
       await updateProfile(cred.user, { displayName })
     }
+    setCurrentUser(cred.user)
     const profile = await _saveUserDoc({ ...cred.user, displayName }, roleHint)
     setCurrentUserRole(profile?.role || null)
     setCurrentUserProfile(profile)
@@ -88,6 +90,7 @@ export function AuthProvider({ children }) {
 
   const loginWithGoogle = async (roleHint = null) => {
     const cred = await signInWithPopup(auth, googleProvider)
+    setCurrentUser(cred.user)
     const profile = await _saveUserDoc(cred.user, roleHint)
     setCurrentUserRole(profile?.role || null)
     setCurrentUserProfile(profile)
@@ -103,6 +106,7 @@ export function AuthProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   return useContext(AuthContext)
 }

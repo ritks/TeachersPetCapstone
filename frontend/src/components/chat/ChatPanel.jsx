@@ -13,6 +13,7 @@ import { getSpeechSynthesis, stripForSpeech, pickBestVoice, loadVoices } from '.
 import { Button, Card, Input } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const WELCOME_MESSAGE = {
   role: 'tutor',
   content: CHAT_COPY.welcome,
@@ -93,13 +94,9 @@ function getSpeechRecognitionCtor() {
 
 function InputBar({ value, onChange, onSubmit, disabled }) {
   const [listening, setListening] = useState(false)
-  const [speechSupported, setSpeechSupported] = useState(false)
+  const [speechSupported] = useState(() => !!getSpeechRecognitionCtor())
   const recognitionRef = useRef(null)
   const prefixRef = useRef('')
-
-  useEffect(() => {
-    setSpeechSupported(!!getSpeechRecognitionCtor())
-  }, [])
 
   useEffect(() => {
     const SpeechRecognition = getSpeechRecognitionCtor()
@@ -233,14 +230,13 @@ function TypingIndicator() {
 export function Bubble({ message }) {
   const isStudent = message.role === 'student'
   const canSpeak = !isStudent && !message.isError
-  const [ttsSupported, setTtsSupported] = useState(false)
+  const [ttsSupported] = useState(() => !!getSpeechSynthesis())
   const [speaking, setSpeaking] = useState(false)
   const utteranceRef = useRef(null)
   const voiceRef = useRef(null)
 
   useEffect(() => {
     const synth = getSpeechSynthesis()
-    setTtsSupported(!!synth)
     if (!synth) return
     let cancelled = false
     loadVoices(synth).then((voices) => {

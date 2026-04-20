@@ -10,8 +10,6 @@ import teacherPfpIcon from '../assets/teacherPFP.png'
 export default function EntryPage({
   onStudentEntry,
   onTeacherEntry,
-  onStudentAuthSuccess,
-  onTeacherAuthSuccess,
 }) {
   const [expanded, setExpanded] = useState(null)
 
@@ -63,12 +61,9 @@ export default function EntryPage({
               </button>
                 )
               })()}
-              {expanded === 'student' && onStudentAuthSuccess && (
+              {expanded === 'student' && (
                 <div className="tp-sheet-enter pt-1">
-                  <StudentLoginPage
-                    embedded
-                    onSuccess={() => onStudentAuthSuccess?.()}
-                  />
+                  <StudentLoginPage embedded />
                 </div>
               )}
 
@@ -104,12 +99,9 @@ export default function EntryPage({
                   </button>
                 )
               })()}
-              {expanded === 'teacher' && onTeacherAuthSuccess && (
+              {expanded === 'teacher' && (
                 <div className="tp-sheet-enter pt-1">
-                  <TeacherLoginPage
-                    embedded
-                    onSuccess={() => onTeacherAuthSuccess?.()}
-                  />
+                  <TeacherLoginPage embedded />
                 </div>
               )}
             </div>

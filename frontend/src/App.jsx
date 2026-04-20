@@ -1,6 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
+import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { APP_COPY } from './content/strings'
 import { useAuth } from './contexts/AuthContext'
+import { useStudent } from './contexts/StudentContext'
 import EntryPage from './components/EntryPage'
 import ChatPanel, { WELCOME_MESSAGE } from './components/chat/ChatPanel'
 import LoadingSpinner from './components/common/LoadingSpinner'
@@ -8,37 +10,6 @@ import StudentSidebar from './components/student/StudentSidebar'
 import StudentDashboard from './components/student/StudentDashboard'
 import TeacherDashboard from './components/teacher/TeacherDashboard'
 import { Button } from './components/ui/primitives'
-
-const NAV_STATE_KEY = 'tpNav'
-const NAV_STUDENT_MODE_KEY = 'tpStudentMode'
-const NAV_STUDENT_MODULE_KEY = 'tpStudentModule'
-
-const APP_VIEWS = {
-  ENTRY: 'entry',
-  TEACHER: 'teacher',
-  STUDENT: 'student',
-}
-
-function getAppView({ userType, currentUser, studentData, authLoading }) {
-  if (authLoading) return null
-  if (userType === null) return APP_VIEWS.ENTRY
-  if (userType === 'teacher' && !currentUser) return APP_VIEWS.ENTRY
-  if (userType === 'student' && !currentUser && !studentData) return APP_VIEWS.ENTRY
-  if (userType === 'teacher') return APP_VIEWS.TEACHER
-  return APP_VIEWS.STUDENT
-}
-
-function loadStoredStudent() {
-  const raw = localStorage.getItem('tp_student')
-  if (!raw) return null
-  try {
-    const data = JSON.parse(raw)
-    if (data?.courseCode && data?.moduleId) return data
-  } catch {
-    /* ignore */
-  }
-  return null
-}
 
 function loadStudentSessions(courseCode) {
   try {
@@ -68,195 +39,114 @@ function makeNewSession() {
   }
 }
 
+function TeacherRoute({ currentUser, currentUserRole, authLoading, children }) {
+  if (authLoading) return <LoadingSpinner />
+  if (currentUser && currentUserRole === 'teacher') return children
+  return <Navigate to="/" replace />
+}
+
+function StudentRoute({ currentUser, currentUserRole, studentData, authLoading, children }) {
+  // Guest users with stored student data don't need Firebase auth to resolve
+  if (authLoading && !studentData) return <LoadingSpinner />
+  // Allow authenticated students OR guest users with a course code
+  if ((currentUser && currentUserRole === 'student') || (!currentUser && studentData)) return children
+  return <Navigate to="/" replace />
+}
+
+
 export default function App() {
   const { currentUser, currentUserRole, authLoading, logout } = useAuth()
-
-  const [userType, setUserType] = useState(null)
-  const [studentData, setStudentData] = useState(null)
-  const [selectedStudentModule, setSelectedStudentModule] = useState(null)
-  const didInitRef = useRef(false)
-  const handlingPopRef = useRef(false)
-  const lastNavRef = useRef(null)
-
-  useEffect(() => {
-    if (authLoading || didInitRef.current) return
-    didInitRef.current = true
-
-    if (currentUser) {
-      setUserType(currentUserRole === 'student' ? 'student' : 'teacher')
-      return
-    }
-
-    const data = loadStoredStudent()
-    if (data) {
-      setStudentData(data)
-      setUserType('student')
-    }
-  }, [authLoading, currentUser, currentUserRole])
-
-  useEffect(() => {
-    if (!currentUser) return
-    if (currentUserRole === 'student') {
-      setSelectedStudentModule(null)
-      setStudentData(null)
-    }
-  }, [currentUser, currentUserRole])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined
-
-    const onPopState = (event) => {
-      const view = event.state?.[NAV_STATE_KEY]
-      if (!view) return
-      if (!Object.values(APP_VIEWS).includes(view)) return
-
-      handlingPopRef.current = true
-      switch (view) {
-        case APP_VIEWS.ENTRY:
-          setUserType(null)
-          setSelectedStudentModule(null)
-          break
-        case APP_VIEWS.TEACHER:
-          setUserType('teacher')
-          setSelectedStudentModule(null)
-          break
-        case APP_VIEWS.STUDENT: {
-          setUserType('student')
-          const studentMode = event.state?.[NAV_STUDENT_MODE_KEY] || 'dashboard'
-          const studentModule = event.state?.[NAV_STUDENT_MODULE_KEY] || null
-          const hasExplicitStudentNav = Object.prototype.hasOwnProperty.call(event.state || {}, NAV_STUDENT_MODE_KEY)
-          if (hasExplicitStudentNav) {
-            setSelectedStudentModule(studentMode === 'module' ? studentModule : null)
-          } else {
-            // Legacy guest-student flow (course-code session without auth).
-            const data = loadStoredStudent()
-            setStudentData(data)
-            setSelectedStudentModule(null)
-          }
-          break
-        }
-        default:
-          break
-      }
-    }
-
-    window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
-  }, [])
-
-  const appView = getAppView({ userType, currentUser, studentData, authLoading })
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (appView === null || !didInitRef.current) return
-
-    const isStudentNav = appView === APP_VIEWS.STUDENT && !!currentUser
-    const studentMode = isStudentNav ? (selectedStudentModule ? 'module' : 'dashboard') : null
-    const state = { ...(window.history.state || {}), [NAV_STATE_KEY]: appView }
-    if (isStudentNav) {
-      state[NAV_STUDENT_MODE_KEY] = studentMode
-      state[NAV_STUDENT_MODULE_KEY] = selectedStudentModule || null
-    }
-    const navToken = isStudentNav ? `${appView}:${studentMode}` : appView
-
-    if (lastNavRef.current === null) {
-      window.history.replaceState(state, '', window.location.href)
-      lastNavRef.current = navToken
-      return
-    }
-
-    if (handlingPopRef.current) {
-      handlingPopRef.current = false
-      lastNavRef.current = navToken
-      return
-    }
-
-    if (navToken !== lastNavRef.current) {
-      window.history.pushState(state, '', window.location.href)
-      lastNavRef.current = navToken
-    } else if (isStudentNav && studentMode === 'module') {
-      // Keep module payload in sync without stacking history entries.
-      window.history.replaceState(state, '', window.location.href)
-    }
-  }, [appView, currentUser, selectedStudentModule])
-
-  if (authLoading) return <LoadingSpinner />
-
-  if (userType === null) {
-    return (
-      <EntryPage
-        onStudentEntry={() => {}}
-        onTeacherEntry={() => {}}
-        onStudentAuthSuccess={() => {
-          setUserType('student')
-        }}
-        onTeacherAuthSuccess={() => setUserType('teacher')}
-      />
-    )
-  }
+  const { studentData, clearStudent } = useStudent()
+  const navigate = useNavigate()
 
   const handleLogout = async () => {
     if (currentUser) {
       await logout()
     } else {
-      localStorage.removeItem('tp_student')
-      setStudentData(null)
+      clearStudent()
     }
-    setSelectedStudentModule(null)
-    setUserType(null)
+    navigate('/', { replace: true })
   }
 
-  if (userType === 'teacher') {
-    return (
-      <TeacherApp
-        currentUser={currentUser}
-        onLogout={handleLogout}
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          authLoading ? <LoadingSpinner /> :
+          currentUser && currentUserRole === 'teacher' ? <Navigate to="/teacher" replace /> :
+          (currentUser && currentUserRole === 'student') || studentData ? <Navigate to="/student" replace /> :
+          <EntryPage />
+        }
       />
-    )
-  }
-
-  if (currentUser) {
-    if (selectedStudentModule) {
-      return (
-        <StudentApp
-          studentData={selectedStudentModule}
-          onLogout={handleLogout}
-          onBack={() => setSelectedStudentModule(null)}
-        />
-      )
-    }
-    return (
-      <StudentDashboard
-        currentUser={currentUser}
-        onOpenModule={(module) => setSelectedStudentModule(module)}
-        onLogout={handleLogout}
+      <Route
+        path="/teacher"
+        element={
+          <TeacherRoute currentUser={currentUser} currentUserRole={currentUserRole} authLoading={authLoading}>
+            <TeacherApp currentUser={currentUser} onLogout={handleLogout} />
+          </TeacherRoute>
+        }
       />
-    )
-  }
-
-  return <StudentApp studentData={studentData} onLogout={handleLogout} />
+      <Route
+        path="/student"
+        element={
+          <StudentRoute currentUser={currentUser} currentUserRole={currentUserRole} studentData={studentData} authLoading={authLoading}>
+            {currentUser
+              ? <StudentDashboard currentUser={currentUser} onLogout={handleLogout} />
+              : <StudentApp studentData={studentData} onLogout={handleLogout} />
+            }
+          </StudentRoute>
+        }
+      />
+      <Route
+        path="/student/module/:moduleId"
+        element={
+          <StudentRoute currentUser={currentUser} currentUserRole={currentUserRole} studentData={studentData} authLoading={authLoading}>
+            <StudentModuleView onLogout={handleLogout} />
+          </StudentRoute>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
 }
 
 function TeacherApp({ currentUser, onLogout }) {
   return <TeacherDashboard onLogout={onLogout} currentUser={currentUser} />
 }
 
-function StudentApp({ studentData, onLogout, onBack = null }) {
-  const storageKey = studentData.courseCode || `${studentData.classId || 'class'}_${studentData.moduleId}`
-  const initRef = useRef(null)
-  if (!initRef.current) {
-    const stored = loadStudentSessions(storageKey)
-    if (stored.length > 0) {
-      initRef.current = { sessions: stored, activeId: stored[0].id }
-    } else {
-      const first = makeNewSession()
-      saveStudentSessions(storageKey, [first])
-      initRef.current = { sessions: [first], activeId: first.id }
-    }
+function StudentModuleView({ onLogout }) {
+  const { moduleId } = useParams()
+  const { getModule } = useStudent()
+  const navigate = useNavigate()
+  const moduleData = getModule(moduleId)
+
+  if (!moduleData) {
+    // Module not in registry (e.g. direct URL visit without going through dashboard)
+    return <Navigate to="/student" replace />
   }
 
-  const [sessions, setSessions] = useState(initRef.current.sessions)
-  const [activeSessionId, setActiveSessionId] = useState(initRef.current.activeId)
+  return (
+    <StudentApp
+      studentData={moduleData}
+      onLogout={onLogout}
+      onBack={() => navigate('/student')}
+    />
+  )
+}
+
+function StudentApp({ studentData, onLogout, onBack = null }) {
+  const storageKey = studentData.courseCode || `${studentData.classId || 'class'}_${studentData.moduleId}`
+  const [sessions, setSessions] = useState(() => {
+    const stored = loadStudentSessions(storageKey)
+    if (stored.length > 0) return stored
+    const first = makeNewSession()
+    saveStudentSessions(storageKey, [first])
+    return [first]
+  })
+  const [activeSessionId, setActiveSessionId] = useState(
+    () => loadStudentSessions(storageKey)[0]?.id ?? ''
+  )
   const teacherName = studentData.teacherName ?? null
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null
