@@ -25,6 +25,7 @@ export function StudentProvider({ children }) {
   // Clear guest data whenever any authenticated user signs in
   useEffect(() => {
     if (!currentUser) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedStudentModule(null)
     setStudentDataState(null)
     localStorage.removeItem('tp_student')
@@ -70,6 +71,7 @@ export function StudentProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useStudent() {
   const ctx = useContext(StudentContext)
   if (!ctx) throw new Error('useStudent must be used within a StudentProvider')

@@ -122,7 +122,7 @@ class TestFeatureName:
 
 ### Integration Tests (`integration/`)
 
-**test_modules_api.py** (10 tests, 100% coverage)
+**test_modules_api.py** (100% coverage)
 - Module CRUD operations (create, read, update, delete)
 - Document upload and listing
 - Multi-step workflows
@@ -130,31 +130,31 @@ class TestFeatureName:
 
 ### Unit Tests (`unit/`)
 
-**test_embeddings.py** (17 tests, 100% coverage)
+**test_embeddings.py** (100% coverage)
 - Single text embedding via Gemini API
 - Batch embedding with configurable batch size
 - Error handling and large text support
 - Mocked google.genai to avoid external API calls
 
-**test_validator.py** (15 tests, 98% coverage)
+**test_validator.py** (98% coverage)
 - Response validation using GitHub-hosted models
 - Authentication token management
 - Custom validator configuration
 - Error handling (timeouts, malformed responses, HTTP errors)
 
-**test_chunker.py** (21 tests, 76% coverage)
+**test_chunker.py** (76% coverage)
 - Text splitting respecting chapter/section boundaries
 - Content preservation across chunks
 - Metadata tracking for chunk lineage
 - Edge cases (empty text, small text, multiple headers)
 
-**test_models.py** (20 tests, 100% coverage)
+**test_models.py** (100% coverage)
 - Module model (creation, defaults, relationships)
 - Document model (status tracking, error messages)
 - Cascade deletion (module → documents)
 - UUID generation, timestamps, nullable fields
 
-**test_vector_store.py** (13 tests, 100% coverage)
+**test_vector_store.py** (100% coverage)
 - ChromaDB operations (add chunks, query, delete)
 - Filtering by module/document ID
 - Chunk counting and batch operations
@@ -209,8 +209,8 @@ class TestFeatureName:
 | `main.py` (API) | 59% | 🟡 Integration tests only; Phase improvements coming |
 | **Overall** | **84%** | ✅ Above 70% target |
 
-**Phase 1** (10 integration tests): API endpoints CRUD & document handling
-**Phase 2** (73 unit tests): RAG pipeline, validators, models, vector store
+**Phase 1** (integration tests): API endpoints CRUD & document handling
+**Phase 2** (unit tests): RAG pipeline, validators, models, vector store
 
 Check detailed coverage:
 ```bash

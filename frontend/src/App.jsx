@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { APP_COPY } from './content/strings'
 import { useAuth } from './contexts/AuthContext'
@@ -46,7 +46,8 @@ function TeacherRoute({ currentUser, currentUserRole, authLoading, children }) {
 }
 
 function StudentRoute({ currentUser, currentUserRole, studentData, authLoading, children }) {
-  if (authLoading) return <LoadingSpinner />
+  // Guest users with stored student data don't need Firebase auth to resolve
+  if (authLoading && !studentData) return <LoadingSpinner />
   // Allow authenticated students OR guest users with a course code
   if ((currentUser && currentUserRole === 'student') || (!currentUser && studentData)) return children
   return <Navigate to="/" replace />
@@ -136,20 +137,16 @@ function StudentModuleView({ onLogout }) {
 
 function StudentApp({ studentData, onLogout, onBack = null }) {
   const storageKey = studentData.courseCode || `${studentData.classId || 'class'}_${studentData.moduleId}`
-  const initRef = useRef(null)
-  if (!initRef.current) {
+  const [sessions, setSessions] = useState(() => {
     const stored = loadStudentSessions(storageKey)
-    if (stored.length > 0) {
-      initRef.current = { sessions: stored, activeId: stored[0].id }
-    } else {
-      const first = makeNewSession()
-      saveStudentSessions(storageKey, [first])
-      initRef.current = { sessions: [first], activeId: first.id }
-    }
-  }
-
-  const [sessions, setSessions] = useState(initRef.current.sessions)
-  const [activeSessionId, setActiveSessionId] = useState(initRef.current.activeId)
+    if (stored.length > 0) return stored
+    const first = makeNewSession()
+    saveStudentSessions(storageKey, [first])
+    return [first]
+  })
+  const [activeSessionId, setActiveSessionId] = useState(
+    () => loadStudentSessions(storageKey)[0]?.id ?? ''
+  )
   const teacherName = studentData.teacherName ?? null
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null

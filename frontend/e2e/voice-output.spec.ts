@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 /**
  * Voice-output feature (issue #17): tutor messages should render a
@@ -9,7 +9,7 @@ import { test, expect } from '@playwright/test';
  * a working TTS engine.
  */
 
-const installSpeechSynthStub = async (page) => {
+const installSpeechSynthStub = async (page: Page) => {
   await page.addInitScript(() => {
     const calls: Array<{ type: string; text?: string }> = [];
     const synth = {
@@ -37,7 +37,7 @@ const installSpeechSynthStub = async (page) => {
     });
     // Lightweight SpeechSynthesisUtterance shim
     // @ts-expect-error - test shim
-    window.SpeechSynthesisUtterance = function (text: string) {
+    window.SpeechSynthesisUtterance = function (this: Record<string, unknown>, text: string) {
       this.text = text;
       this.rate = 1;
       this.pitch = 1;
@@ -51,26 +51,42 @@ const installSpeechSynthStub = async (page) => {
 };
 
 test.describe('Voice output on tutor messages', () => {
+  // Helper: seed localStorage so the guest StudentRoute allows access to /student
+  const seedGuestStudent = async (page: Page) => {
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.setItem('tp_student', JSON.stringify({
+        courseCode: 'TEST01',
+        moduleId: 'test-module',
+        moduleName: 'Test Module',
+        teacherName: null,
+        teacherUid: null,
+      }));
+    });
+  };
+
   test('speaker button renders on the guest welcome message', async ({ page }) => {
     await installSpeechSynthStub(page);
-    await page.goto('/');
+    await seedGuestStudent(page);
+    await page.goto('/student');
     await page.waitForLoadState('domcontentloaded');
 
-    // Enter guest mode
-    const guestBtn = page.getByRole('button', { name: /just chat/i });
-    await guestBtn.click();
+    // The empty state hides individual bubbles; trigger a quick-action to render a real tutor Bubble
+    await page.getByText('Homework Help').click();
 
-    // Welcome tutor message renders, speaker button should appear next to it
+    // Speaker button should appear next to the tutor message
     const speakerBtn = page.getByRole('button', { name: /read tutor message aloud/i });
     await expect(speakerBtn.first()).toBeVisible();
   });
 
   test('clicking the speaker button invokes speechSynthesis.speak', async ({ page }) => {
     await installSpeechSynthStub(page);
-    await page.goto('/');
+    await seedGuestStudent(page);
+    await page.goto('/student');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: /just chat/i }).click();
+    // Trigger a quick-action to render a real tutor Bubble
+    await page.getByText('Homework Help').click();
 
     const speakerBtn = page.getByRole('button', { name: /read tutor message aloud/i }).first();
     await expect(speakerBtn).toBeVisible();
@@ -93,10 +109,12 @@ test.describe('Voice output on tutor messages', () => {
         value: undefined,
       });
     });
-    await page.goto('/');
+    await seedGuestStudent(page);
+    await page.goto('/student');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: /just chat/i }).click();
+    // Trigger a quick-action to render a real tutor Bubble
+    await page.getByText('Homework Help').click();
 
     // Welcome message should render, but the speaker button should not
     const speakerBtn = page.getByRole('button', { name: /read tutor message aloud/i });

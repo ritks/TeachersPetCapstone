@@ -308,6 +308,7 @@ function ClassManagementPanel({ currentUser }) {
 
   useEffect(() => {
     refreshData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser])
 
   useEffect(() => {

@@ -16,21 +16,21 @@ Requires the backend running on http://localhost:8000 and a `frontend/.env` file
 ```
 src/
 ├── firebase.js                  # Firebase app, auth, Firestore exports
-├── main.jsx                     # Entry point — wraps app in AuthProvider
-├── App.jsx                      # All routing and page logic
-├── __tests__/
-│   └── setup.js                 # Test environment setup and mocks
+├── main.jsx                     # Entry point — BrowserRouter, AuthProvider, StudentProvider
+├── App.jsx                      # URL-based routing (/teacher, /student, /student/module/:id)
 ├── contexts/
-│   └── AuthContext.jsx          # useAuth() hook (login, register, Google, logout)
-└── components/
-    ├── EntryPage.jsx             # Landing page (Student / Teacher / Guest)
-    ├── EntryPage.test.jsx        # EntryPage tests (collocated)
-    ├── TeacherLoginPage.jsx      # Email+password and Google OAuth
-    ├── TeacherLoginPage.test.jsx # TeacherLoginPage tests
-    ├── StudentEntryPage.jsx      # Course code entry
-    ├── StudentEntryPage.test.jsx # StudentEntryPage tests
-    ├── AnalyticsDashboard.jsx    # Teacher view of student chat logs
-    └── AnalyticsDashboard.test.jsx # AnalyticsDashboard tests
+│   ├── AuthContext.jsx          # useAuth() hook (login, register, Google, logout)
+│   └── StudentContext.jsx       # Guest/authenticated student state + localStorage
+├── components/
+│   ├── EntryPage.jsx            # Landing page (Student / Teacher panels)
+│   ├── EntryPage.test.jsx       # EntryPage tests (collocated)
+│   ├── TeacherLoginPage.jsx     # Email+password and Google OAuth
+│   ├── StudentLoginPage.jsx     # Student email login
+│   ├── StudentEntryPage.jsx     # Course code entry
+│   └── student/
+│       └── StudentDashboard.jsx # Authenticated student class/module view
+└── lib/
+    └── speech.test.js           # TTS speech library tests
 ```
 
 ## Environment Variables
@@ -53,6 +53,9 @@ VITE_FIREBASE_APP_ID=...
 Tests use **Vitest** for unit testing and **React Testing Library** for component testing.
 
 ```bash
+# Run all checks locally (mirrors CI pipeline)
+npm run pr-check
+
 # Run all tests
 npm test
 
