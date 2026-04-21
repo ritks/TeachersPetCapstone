@@ -10,6 +10,7 @@ import {
 import { db } from '../../firebase'
 import { CHAT_COPY } from '../../content/strings'
 import { getSpeechSynthesis, stripForSpeech, pickBestVoice, loadVoices } from '../../lib/speech'
+import { apiUrl } from '../../lib/api'
 import { Button, Card, Input } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
 
@@ -392,7 +393,7 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, ses
       const body = { question, session_id: sessionId }
       if (selectedModuleId) body.module_id = selectedModuleId
 
-      const res = await fetch('http://localhost:8000/chat', {
+      const res = await fetch(apiUrl('/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
