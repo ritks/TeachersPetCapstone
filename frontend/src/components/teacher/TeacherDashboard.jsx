@@ -4,6 +4,7 @@ import { addDoc, collection, doc, getDocs, query, serverTimestamp, setDoc, where
 import { db } from '../../firebase'
 import { Badge, Button, Card, Input, Panel } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
+import { apiUrl } from '../../lib/api'
 
 function DashboardStat({ label, value, tone }) {
   const tones = {
@@ -138,7 +139,7 @@ function ClassManagementPanel({ currentUser }) {
     setInfoMessage('')
     try {
       const settled = await Promise.allSettled([
-        fetch(`http://localhost:8000/modules?teacher_uid=${encodeURIComponent(currentUser.uid)}`),
+        fetch(apiUrl(`/modules?teacher_uid=${encodeURIComponent(currentUser.uid)}`)),
         getDocs(query(collection(db, 'teacherClasses'), where('teacherUid', '==', currentUser.uid))),
         getDocs(query(collection(db, 'classModules'), where('teacherUid', '==', currentUser.uid))),
         getDocs(query(collection(db, 'prompts'), where('teacherUid', '==', currentUser.uid))),
@@ -374,7 +375,7 @@ function ClassManagementPanel({ currentUser }) {
 
     setCreatingModuleForClass(classId)
     try {
-      const response = await fetch('http://localhost:8000/modules', {
+      const response = await fetch(apiUrl('/modules'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1183,7 +1184,7 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
 
       try {
         const [moduleRes, classesSnap, studentsSnap, classModulesSnap] = await Promise.all([
-          fetch(`http://localhost:8000/modules?teacher_uid=${encodeURIComponent(currentUser.uid)}`),
+          fetch(apiUrl(`/modules?teacher_uid=${encodeURIComponent(currentUser.uid)}`)),
           getDocs(query(collection(db, 'teacherClasses'), where('teacherUid', '==', currentUser.uid))),
           getDocs(query(collection(db, 'classStudents'), where('teacherUid', '==', currentUser.uid))),
           getDocs(query(collection(db, 'classModules'), where('teacherUid', '==', currentUser.uid))),

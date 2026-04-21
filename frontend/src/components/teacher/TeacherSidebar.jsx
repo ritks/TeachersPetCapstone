@@ -3,6 +3,7 @@ import { collection, doc, getDocs, query, serverTimestamp, setDoc, where } from 
 import { db } from '../../firebase'
 import DocumentPanel from './DocumentPanel'
 import { Badge, Button, Input } from '../ui/primitives'
+import { apiUrl } from '../../lib/api'
 
 export default function TeacherSidebar({
   open,
@@ -51,7 +52,7 @@ export default function TeacherSidebar({
       const body = { name, description: newDesc.trim() || undefined }
       if (currentUser) body.teacher_uid = currentUser.uid
 
-      const res = await fetch('http://localhost:8000/modules', {
+      const res = await fetch(apiUrl('/modules'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

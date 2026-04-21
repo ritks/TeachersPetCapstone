@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { Badge, Button } from '../ui/primitives'
+import { apiUrl } from '../../lib/api'
 
 export default function DocumentPanel({ moduleId, documents, onDocumentsChanged }) {
   const [uploading, setUploading] = useState(false)
@@ -15,12 +16,12 @@ export default function DocumentPanel({ moduleId, documents, onDocumentsChanged 
       const form = new FormData()
       form.append('file', file)
       const uploadRes = await fetch(
-        `http://localhost:8000/modules/${moduleId}/documents`,
+        apiUrl(`/modules/${moduleId}/documents`),
         { method: 'POST', body: form },
       )
       const docData = await uploadRes.json()
       await fetch(
-        `http://localhost:8000/modules/${moduleId}/documents/${docData.id}/process`,
+        apiUrl(`/modules/${moduleId}/documents/${docData.id}/process`),
         { method: 'POST' },
       )
     } catch {
@@ -33,7 +34,7 @@ export default function DocumentPanel({ moduleId, documents, onDocumentsChanged 
 
   const handleDelete = async (docId) => {
     try {
-      await fetch(`http://localhost:8000/modules/${moduleId}/documents/${docId}`, { method: 'DELETE' })
+      await fetch(apiUrl(`/modules/${moduleId}/documents/${docId}`), { method: 'DELETE' })
     } catch {
       /* ignore */
     }
