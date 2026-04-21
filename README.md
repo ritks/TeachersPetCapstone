@@ -37,14 +37,18 @@ TeachersPetCapstone/
 ├── frontend/
 │   ├── src/
 │   │   ├── firebase.js          # Firebase app init (auth, db, googleProvider)
-│   │   ├── main.jsx             # React entry point, wraps app in AuthProvider
-│   │   ├── App.jsx              # Routing, all page/component logic
+│   │   ├── main.jsx             # React entry point — BrowserRouter, AuthProvider, StudentProvider
+│   │   ├── App.jsx              # URL-based routing (/teacher, /student, /student/module/:id)
 │   │   ├── contexts/
-│   │   │   └── AuthContext.jsx  # Firebase auth context + useAuth() hook
+│   │   │   ├── AuthContext.jsx  # Firebase auth context + useAuth() hook
+│   │   │   └── StudentContext.jsx # Guest/student state, localStorage persistence
 │   │   └── components/
-│   │       ├── EntryPage.jsx        # Landing — Student / Teacher / Guest
+│   │       ├── EntryPage.jsx        # Landing — Student / Teacher panels
 │   │       ├── TeacherLoginPage.jsx # Email+password & Google OAuth login
+│   │       ├── StudentLoginPage.jsx # Student email login
 │   │       ├── StudentEntryPage.jsx # Course code entry & Firestore validation
+│   │       ├── student/
+│   │       │   └── StudentDashboard.jsx # Authenticated student class/module view
 │   │       └── AnalyticsDashboard.jsx # Teacher chat log viewer
 │   ├── .env                     # VITE_FIREBASE_* keys (git-ignored)
 │   └── package.json
@@ -213,14 +217,16 @@ Open http://localhost:5173.
 
 ## User Flows
 
-### Guest
-Click **Just Chat** on the landing page → general-purpose math chat with no module context. No account required.
-
-### Student
+### Student (guest — course code)
 1. Click **I'm a Student** → enter the 6-character course code provided by your teacher.
-2. The code is validated against Firestore `courseCodes/`. If valid, the linked module is auto-selected and the session is remembered in `localStorage`.
+2. The code is validated against Firestore `courseCodes/`. If valid, the linked module is stored in `localStorage` and you are redirected to `/student`.
 3. Every prompt and response is logged to Firestore `prompts/` for teacher review.
-4. To leave or switch classes, click **Leave** in the header.
+4. To leave or switch classes, click **Logout** in the header.
+
+### Student (authenticated)
+1. Click **I'm a Student** → sign in with email/password.
+2. Your enrolled classes and unlocked modules are fetched from Firestore.
+3. Click **Open Module** on an unlocked module to start chatting at `/student/module/:id`.
 
 ### Teacher
 1. Click **I'm a Teacher** → sign in with email/password or Google OAuth.
@@ -256,7 +262,7 @@ pytest tests/ --cov=.         # With coverage report
 pytest tests/unit/test_chunker.py -v  # Specific test file
 ```
 
-**Coverage:** 83 tests passing (66 unit + 17 integration)
+**Coverage:** All tests passing
 - RAG/validators: 98%+ coverage
 - Database models: 100% coverage
 - API endpoints: Full integration test coverage
@@ -280,8 +286,8 @@ npm run test:e2e:debug   # Debug mode
 ```
 
 **Coverage:**
-- Unit tests: 5 tests covering entry page, navigation, and auth flows
-- E2E tests: 52 tests spanning:
+- Unit tests: entry page, speech lib, and auth flows
+- E2E tests spanning:
   - Navigation and page loading
   - UI rendering and interactions
   - API integration and error handling

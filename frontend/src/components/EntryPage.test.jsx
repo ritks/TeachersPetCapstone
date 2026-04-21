@@ -1,33 +1,56 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import EntryPage from './EntryPage'
 
+// Mock auth context so inline login forms don't crash without a provider
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: () => ({
+    login: vi.fn(),
+    register: vi.fn(),
+    loginWithGoogle: vi.fn(),
+    currentUser: null,
+    currentUserRole: null,
+    authLoading: false,
+  }),
+}))
+
+// Mock student context used by StudentEntryPage inside StudentLoginPage flow
+vi.mock('../contexts/StudentContext', () => ({
+  useStudent: () => ({
+    studentData: null,
+    setStudentData: vi.fn(),
+    clearStudent: vi.fn(),
+  }),
+}))
+
+const renderWithRouter = (ui) => render(<MemoryRouter>{ui}</MemoryRouter>)
+
 describe('EntryPage', () => {
-  it('should render the page title and subtitle', () => {
-    render(<EntryPage onStudentEntry={() => {}} onTeacherEntry={() => {}} onGuestEntry={() => {}} />)
-    expect(screen.getByText("Teacher's Pet")).toBeInTheDocument()
-    expect(screen.getByText('AI-Powered Math Tutor')).toBeInTheDocument()
+  it('should render updated marketing copy', () => {
+    renderWithRouter(<EntryPage onStudentEntry={() => {}} onTeacherEntry={() => {}} />)
+    expect(screen.getByText(/log in to your classroom/i)).toBeInTheDocument()
+    expect(screen.getByText(/where every math problem becomes an aha moment/i)).toBeInTheDocument()
   })
 
-  it('should render three entry option buttons', () => {
-    render(<EntryPage onStudentEntry={() => {}} onTeacherEntry={() => {}} onGuestEntry={() => {}} />)
+  it('should render only student and teacher entry buttons', () => {
+    renderWithRouter(<EntryPage onStudentEntry={() => {}} onTeacherEntry={() => {}} />)
     expect(screen.getByRole('button', { name: /i'm a student/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /i'm a teacher/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /just chat/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /just chat/i })).not.toBeInTheDocument()
   })
 
   it('should call onStudentEntry when student button is clicked', async () => {
     const user = userEvent.setup()
     const onStudentEntry = vi.fn()
-    render(
+    renderWithRouter(
       <EntryPage
         onStudentEntry={onStudentEntry}
         onTeacherEntry={() => {}}
-        onGuestEntry={() => {}}
       />
     )
-    
+
     const studentButton = screen.getByRole('button', { name: /i'm a student/i })
     await user.click(studentButton)
     expect(onStudentEntry).toHaveBeenCalledOnce()
@@ -36,11 +59,10 @@ describe('EntryPage', () => {
   it('should call onTeacherEntry when teacher button is clicked', async () => {
     const user = userEvent.setup()
     const onTeacherEntry = vi.fn()
-    render(
+    renderWithRouter(
       <EntryPage
         onStudentEntry={() => {}}
         onTeacherEntry={onTeacherEntry}
-        onGuestEntry={() => {}}
       />
     )
 
@@ -49,19 +71,4 @@ describe('EntryPage', () => {
     expect(onTeacherEntry).toHaveBeenCalledOnce()
   })
 
-  it('should call onGuestEntry when guest button is clicked', async () => {
-    const user = userEvent.setup()
-    const onGuestEntry = vi.fn()
-    render(
-      <EntryPage
-        onStudentEntry={() => {}}
-        onTeacherEntry={() => {}}
-        onGuestEntry={onGuestEntry}
-      />
-    )
-
-    const guestButton = screen.getByRole('button', { name: /just chat/i })
-    await user.click(guestButton)
-    expect(onGuestEntry).toHaveBeenCalledOnce()
-  })
 })

@@ -1,62 +1,130 @@
-export default function EntryPage({ onStudentEntry, onTeacherEntry, onGuestEntry }) {
+import { APP_COPY, ENTRY_COPY } from '../content/strings'
+import { AppShell, Card } from './ui/primitives'
+import LogoMark from './common/LogoMark'
+import { useState } from 'react'
+import StudentLoginPage from './StudentLoginPage'
+import TeacherLoginPage from './TeacherLoginPage'
+import studentPfpIcon from '../assets/studentPFP.png'
+import teacherPfpIcon from '../assets/teacherPFP.png'
+
+export default function EntryPage({
+  onStudentEntry,
+  onTeacherEntry,
+}) {
+  const [expanded, setExpanded] = useState(null)
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
-      <div className="mb-10 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-9 h-9 text-indigo-500" viewBox="0 0 24 24" fill="currentColor">
-            <ellipse cx="5.5" cy="6.5" rx="2.5" ry="3" />
-            <ellipse cx="10" cy="4" rx="2" ry="2.5" />
-            <ellipse cx="14.5" cy="4" rx="2" ry="2.5" />
-            <ellipse cx="18.5" cy="6.5" rx="2" ry="2.5" />
-            <path d="M12 9c-4.418 0-8 2.686-8 6 0 2.21 3.582 4 8 4s8-1.79 8-4c0-3.314-3.582-6-8-6z" />
-          </svg>
-        </div>
-        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Teacher's Pet</h1>
-        <p className="text-gray-400 mt-2">AI-Powered Math Tutor</p>
+    <AppShell className="px-0 min-h-screen overflow-x-hidden lg:h-screen lg:overflow-hidden">
+      <div className="min-h-screen lg:h-full grid grid-cols-1 lg:grid-cols-[minmax(340px,480px)_1fr]">
+        <section className="bg-[var(--color-bg-surface)] border-r border-[var(--color-border-subtle)] px-8 py-10 lg:px-10 lg:py-12 flex items-start lg:items-center lg:h-screen lg:overflow-y-auto">
+          <div className="w-full max-w-md mx-auto">
+            <p className="text-xs uppercase tracking-[0.16em] text-[var(--color-text-muted)] mb-3">
+              {APP_COPY.appName}
+            </p>
+            <h1 className="text-4xl font-semibold tracking-tight leading-tight text-[var(--color-text-primary)]">
+              {ENTRY_COPY.heroTitle}
+            </h1>
+            <p className="text-[var(--color-text-secondary)] mt-4 mb-8">
+              {ENTRY_COPY.heroSubtitle}
+            </p>
+
+            <div className="flex flex-col gap-3">
+              {(() => {
+                const studentActive = expanded === 'student'
+                return (
+              <button
+                onClick={() => {
+                  onStudentEntry?.()
+                  setExpanded((prev) => (prev === 'student' ? null : 'student'))
+                }}
+                className="group text-left"
+              >
+                <Card
+                  interactive
+                  className={[
+                    'tp-interactive-card p-5 flex items-center gap-6 transition-colors',
+                    studentActive
+                      ? 'tp-card-active bg-[var(--color-brand-600)] border-[var(--color-brand-600)] shadow-[0_12px_28px_rgba(79,70,229,0.32)]'
+                      : '',
+                  ].join(' ')}
+                >
+                  <img
+                    src={studentPfpIcon}
+                    alt="Student icon"
+                    className="w-20 h-20 object-contain flex-shrink-0"
+                  />
+                  <div>
+                    <p className={['text-lg font-semibold', studentActive ? 'text-white' : 'text-gray-800'].join(' ')}>{ENTRY_COPY.studentTitle}</p>
+                    <p className={['text-sm mt-0.5', studentActive ? 'text-indigo-100' : 'text-gray-500'].join(' ')}>{ENTRY_COPY.studentSubtitle}</p>
+                  </div>
+                </Card>
+              </button>
+                )
+              })()}
+              {expanded === 'student' && (
+                <div className="tp-sheet-enter pt-1">
+                  <StudentLoginPage embedded />
+                </div>
+              )}
+
+              {(() => {
+                const teacherActive = expanded === 'teacher'
+                return (
+                  <button
+                    onClick={() => {
+                      onTeacherEntry?.()
+                      setExpanded((prev) => (prev === 'teacher' ? null : 'teacher'))
+                    }}
+                    className="group text-left"
+                  >
+                    <Card
+                      interactive
+                      className={[
+                        'tp-interactive-card p-5 flex items-center gap-6 transition-colors',
+                        teacherActive
+                          ? 'tp-card-active bg-[var(--color-brand-600)] border-[var(--color-brand-600)] shadow-[0_12px_28px_rgba(79,70,229,0.32)]'
+                          : '',
+                      ].join(' ')}
+                    >
+                      <img
+                        src={teacherPfpIcon}
+                        alt="Teacher icon"
+                        className="w-20 h-20 object-contain flex-shrink-0"
+                      />
+                      <div>
+                        <p className={['text-lg font-semibold', teacherActive ? 'text-white' : 'text-gray-800'].join(' ')}>{ENTRY_COPY.teacherTitle}</p>
+                        <p className={['text-sm mt-0.5', teacherActive ? 'text-indigo-100' : 'text-gray-500'].join(' ')}>{ENTRY_COPY.teacherSubtitle}</p>
+                      </div>
+                    </Card>
+                  </button>
+                )
+              })()}
+              {expanded === 'teacher' && (
+                <div className="tp-sheet-enter pt-1">
+                  <TeacherLoginPage embedded />
+                </div>
+              )}
+            </div>
+
+            <p className="text-sm text-[var(--color-text-muted)] mt-8">
+              {APP_COPY.appTagline}
+            </p>
+          </div>
+        </section>
+
+        <section className="hidden lg:flex relative overflow-hidden items-center justify-center h-screen bg-gradient-to-br from-[var(--color-primary-700)] via-[var(--color-primary-700)] to-[var(--color-secondary-600)]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_42%,rgba(255,255,255,0.24),rgba(255,255,255,0)_56%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(118deg,rgba(9,14,24,0.82)_16%,rgba(9,14,24,0.08)_67%,rgba(255,255,255,0.18)_100%)]" />
+          <div className="relative z-10 w-[min(70vw,760px)] h-[min(70vw,760px)] rounded-[2.75rem] p-7 bg-gradient-to-br from-[rgba(253,254,255,0.74)] via-[rgba(238,243,249,0.62)] to-[rgba(215,225,237,0.56)] shadow-[0_24px_64px_rgba(0,0,0,0.34)] border border-white/45 backdrop-blur-[3px]">
+            <div className="pointer-events-none absolute inset-0 rounded-[2.75rem] bg-[linear-gradient(140deg,rgba(255,255,255,0.38)_6%,rgba(255,255,255,0.08)_34%,rgba(27,38,59,0.05)_58%,rgba(255,255,255,0.2)_100%)]" />
+            <LogoMark
+              alt={ENTRY_COPY.visualAlt}
+              containerClassName="relative z-10 w-full h-full rounded-[2.25rem] bg-transparent overflow-hidden"
+              imgClassName="rounded-[2.25rem] brightness-[0.92] saturate-[0.88] contrast-[0.96] mix-blend-multiply drop-shadow-[0_16px_40px_rgba(0,0,0,0.22)]"
+            />
+          </div>
+        </section>
       </div>
-
-      <div className="flex flex-col sm:flex-row gap-4 w-full max-w-2xl">
-        <button
-          onClick={onStudentEntry}
-          className="flex-1 rounded-2xl bg-white border border-gray-200 p-8 flex flex-col items-center gap-3 hover:shadow-md hover:border-indigo-200 transition-all group"
-        >
-          <div className="w-12 h-12 rounded-xl bg-indigo-50 group-hover:bg-indigo-100 flex items-center justify-center transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 14c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" />
-              <circle cx="12" cy="8" r="4" />
-            </svg>
-          </div>
-          <span className="text-lg font-semibold text-gray-800">I'm a Student</span>
-          <span className="text-sm text-gray-400 text-center">Enter your course code to start learning</span>
-        </button>
-
-        <button
-          onClick={onTeacherEntry}
-          className="flex-1 rounded-2xl bg-white border border-gray-200 p-8 flex flex-col items-center gap-3 hover:shadow-md hover:border-indigo-200 transition-all group"
-        >
-          <div className="w-12 h-12 rounded-xl bg-indigo-50 group-hover:bg-indigo-100 flex items-center justify-center transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
-              <path d="M6 12v5c3 3 9 3 12 0v-5" />
-            </svg>
-          </div>
-          <span className="text-lg font-semibold text-gray-800">I'm a Teacher</span>
-          <span className="text-sm text-gray-400 text-center">Manage modules and view analytics</span>
-        </button>
-
-        <button
-          onClick={onGuestEntry}
-          className="flex-1 rounded-2xl bg-white border border-gray-200 p-8 flex flex-col items-center gap-3 hover:shadow-md hover:border-gray-300 transition-all group"
-        >
-          <div className="w-12 h-12 rounded-xl bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-gray-400 group-hover:text-gray-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-          </div>
-          <span className="text-lg font-semibold text-gray-800">Just Chat</span>
-          <span className="text-sm text-gray-400 text-center">Continue without signing in</span>
-        </button>
-      </div>
-    </div>
+    </AppShell>
   )
 }

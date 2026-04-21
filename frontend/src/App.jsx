@@ -1,147 +1,32 @@
-import { useState, useRef, useEffect } from 'react'
-import ReactMarkdown from 'react-markdown'
-import rehypeKatex from 'rehype-katex'
-import remarkMath from 'remark-math'
-import 'katex/dist/katex.min.css'
-import {
-  collection,
-  addDoc,
-  doc,
-  setDoc,
-  getDoc,
-  serverTimestamp,
-} from 'firebase/firestore'
-import { db } from './firebase'
+import { useState } from 'react'
+import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { APP_COPY } from './content/strings'
 import { useAuth } from './contexts/AuthContext'
+import { useStudent } from './contexts/StudentContext'
 import EntryPage from './components/EntryPage'
-import TeacherLoginPage from './components/TeacherLoginPage'
-import StudentEntryPage from './components/StudentEntryPage'
-import AnalyticsDashboard from './components/AnalyticsDashboard'
-import { getSpeechSynthesis, stripForSpeech, pickBestVoice, loadVoices } from './lib/speech'
+import ChatPanel, { WELCOME_MESSAGE } from './components/chat/ChatPanel'
+import LoadingSpinner from './components/common/LoadingSpinner'
+import StudentSidebar from './components/student/StudentSidebar'
+import StudentDashboard from './components/student/StudentDashboard'
+import TeacherDashboard from './components/teacher/TeacherDashboard'
+import { Button } from './components/ui/primitives'
 
-const NAV_STATE_KEY = 'tpNav'
-
-const APP_VIEWS = {
-  ENTRY: 'entry',
-  TEACHER_LOGIN: 'teacher-login',
-  STUDENT_ENTRY: 'student-entry',
-  TEACHER: 'teacher',
-  STUDENT: 'student',
-  GUEST: 'guest',
-}
-
-function getAppView({ userType, currentUser, studentData, authLoading }) {
-  if (authLoading) return null
-  if (userType === null) return APP_VIEWS.ENTRY
-  if (userType === 'teacher' && !currentUser) return APP_VIEWS.TEACHER_LOGIN
-  if (userType === 'student' && !studentData) return APP_VIEWS.STUDENT_ENTRY
-  if (userType === 'teacher') return APP_VIEWS.TEACHER
-  if (userType === 'guest') return APP_VIEWS.GUEST
-  return APP_VIEWS.STUDENT
-}
-
-function loadStoredStudent() {
-  const raw = localStorage.getItem('tp_student')
-  if (!raw) return null
-  try {
-    const data = JSON.parse(raw)
-    if (data?.courseCode && data?.moduleId) return data
-  } catch {
-    /* ignore */
-  }
-  return null
-}
-
-const WELCOME_MESSAGE = {
-  role: 'tutor',
-  content:
-    "Hello! I'm Teacher's Pet, your math tutor. Feel free to ask me any math question — I'll walk you through it step by step.",
-}
-
-/* ── Student greeting bank ───────────────────────────────────── */
-const GREETING_MESSAGES = [
-  "Hey Math Wiz! What are we solving today?",
-  "Good morning, fellow math enthusiast!",
-  "Ready to crunch some numbers?",
-  "Hello, future mathematician!",
-  "Let's tackle some problems together!",
-  "Great to see you! Math awaits.",
-  "Hey there, problem solver!",
-  "Time to make math click!",
-  "Welcome! What shall we learn today?",
-  "Let's make math make sense!",
-]
-
-/* ── Quick action cards ──────────────────────────────────────── */
-const QUICK_ACTIONS = [
-  {
-    title: 'Homework Help',
-    subtitle: 'Walk me through a problem',
-    iconBg: 'bg-orange-100',
-    iconColor: 'text-orange-500',
-    response: "Of course! Go ahead and type out your homework problem and I'll walk you through it step by step.",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Practice Problems',
-    subtitle: 'Give me something to solve',
-    iconBg: 'bg-blue-100',
-    iconColor: 'text-blue-500',
-    response: "Let's practice! Tell me what topic you'd like to work on and I'll come up with a problem for you.",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" />
-        <line x1="10" y1="3" x2="8" y2="21" /><line x1="16" y1="3" x2="14" y2="21" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Explain a Concept',
-    subtitle: 'Break it down simply',
-    iconBg: 'bg-purple-100',
-    iconColor: 'text-purple-500',
-    response: "Happy to explain! What concept would you like me to break down for you?",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="8" x2="12" y2="12" />
-        <line x1="12" y1="16" x2="12.01" y2="16" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Study Tips',
-    subtitle: 'Help me prepare',
-    iconBg: 'bg-green-100',
-    iconColor: 'text-green-500',
-    response: "Great thinking ahead! What subject or topic are you studying for? I'll share some tips to help you prepare.",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-      </svg>
-    ),
-  },
-]
-
-/* ── Student session helpers ─────────────────────────────────── */
 function loadStudentSessions(courseCode) {
   try {
     const raw = localStorage.getItem(`tp_sessions_${courseCode}`)
     if (raw) return JSON.parse(raw)
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return []
 }
 
 function saveStudentSessions(courseCode, sessions) {
   try {
     localStorage.setItem(`tp_sessions_${courseCode}`, JSON.stringify(sessions))
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 function makeNewSession() {
@@ -154,325 +39,114 @@ function makeNewSession() {
   }
 }
 
-/* ── helpers ─────────────────────────────────────────────────── */
-function generateCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let code = ''
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)]
-  return code
-}
-
-async function getUniqueCode() {
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const code = generateCode()
-    const snap = await getDoc(doc(db, 'courseCodes', code))
-    if (!snap.exists()) return code
-  }
-  throw new Error('Could not generate a unique course code.')
-}
-
-/* ── App ─────────────────────────────────────────────────────── */
-export default function App() {
-  const { currentUser, authLoading, logout } = useAuth()
-
-  // null | 'student' | 'teacher' | 'guest'
-  const [userType, setUserType] = useState(null)
-  const [studentData, setStudentData] = useState(null) // { courseCode, moduleId, moduleName, teacherUid }
-  const didInitRef = useRef(false)
-  const handlingPopRef = useRef(false)
-  const lastViewRef = useRef(null)
-
-  // One-time app bootstrap
-  useEffect(() => {
-    if (authLoading || didInitRef.current) return
-    didInitRef.current = true
-
-    const data = loadStoredStudent()
-    if (data) {
-      setStudentData(data)
-      setUserType('student')
-      return
-    }
-    if (currentUser) {
-      setUserType('teacher')
-    }
-  }, [authLoading, currentUser])
-
-  // Browser back/forward support for top-level app screens
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined
-
-    const onPopState = (event) => {
-      const view = event.state?.[NAV_STATE_KEY]
-      if (!view) return
-
-      if (!Object.values(APP_VIEWS).includes(view)) return
-      handlingPopRef.current = true
-
-      switch (view) {
-        case APP_VIEWS.ENTRY:
-          setUserType(null)
-          break
-        case APP_VIEWS.TEACHER_LOGIN:
-          setUserType('teacher')
-          break
-        case APP_VIEWS.STUDENT_ENTRY:
-          setUserType('student')
-          setStudentData(null)
-          break
-        case APP_VIEWS.TEACHER:
-          setUserType('teacher')
-          break
-        case APP_VIEWS.GUEST:
-          setUserType('guest')
-          break
-        case APP_VIEWS.STUDENT: {
-          const data = loadStoredStudent()
-          setStudentData(data)
-          setUserType('student')
-          break
-        }
-        default:
-          break
-      }
-    }
-
-    window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
-  }, [])
-
-  const appView = getAppView({ userType, currentUser, studentData, authLoading })
-
-  // Keep browser history in sync with current app screen
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (appView === null || !didInitRef.current) return
-
-    const state = { ...(window.history.state || {}), [NAV_STATE_KEY]: appView }
-
-    if (lastViewRef.current === null) {
-      window.history.replaceState(state, '', window.location.href)
-      lastViewRef.current = appView
-      return
-    }
-
-    if (handlingPopRef.current) {
-      handlingPopRef.current = false
-      lastViewRef.current = appView
-      return
-    }
-
-    if (appView !== lastViewRef.current) {
-      window.history.pushState(state, '', window.location.href)
-      lastViewRef.current = appView
-    }
-  }, [appView])
-
+function TeacherRoute({ currentUser, currentUserRole, authLoading, children }) {
   if (authLoading) return <LoadingSpinner />
+  if (currentUser && currentUserRole === 'teacher') return children
+  return <Navigate to="/" replace />
+}
 
-  if (userType === null) {
-    return (
-      <EntryPage
-        onStudentEntry={() => setUserType('student')}
-        onTeacherEntry={() => setUserType('teacher')}
-        onGuestEntry={() => setUserType('guest')}
-      />
-    )
-  }
+function StudentRoute({ currentUser, currentUserRole, studentData, authLoading, children }) {
+  // Guest users with stored student data don't need Firebase auth to resolve
+  if (authLoading && !studentData) return <LoadingSpinner />
+  // Allow authenticated students OR guest users with a course code
+  if ((currentUser && currentUserRole === 'student') || (!currentUser && studentData)) return children
+  return <Navigate to="/" replace />
+}
 
-  if (userType === 'teacher' && !currentUser) {
-    return (
-      <TeacherLoginPage
-        onSuccess={() => { /* currentUser will update via onAuthStateChanged */ }}
-      />
-    )
-  }
 
-  if (userType === 'student' && !studentData) {
-    return (
-      <StudentEntryPage
-        onSuccess={(data) => setStudentData(data)}
-      />
-    )
-  }
+export default function App() {
+  const { currentUser, currentUserRole, authLoading, logout } = useAuth()
+  const { studentData, clearStudent } = useStudent()
+  const navigate = useNavigate()
 
   const handleLogout = async () => {
-    if (userType === 'teacher') {
+    if (currentUser) {
       await logout()
     } else {
-      localStorage.removeItem('tp_student')
-      setStudentData(null)
+      clearStudent()
     }
-    setUserType(null)
+    navigate('/', { replace: true })
   }
 
-  if (userType === 'teacher') {
-    return (
-      <TeacherApp
-        currentUser={currentUser}
-        onLogout={handleLogout}
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          authLoading ? <LoadingSpinner /> :
+          currentUser && currentUserRole === 'teacher' ? <Navigate to="/teacher" replace /> :
+          (currentUser && currentUserRole === 'student') || studentData ? <Navigate to="/student" replace /> :
+          <EntryPage />
+        }
       />
-    )
+      <Route
+        path="/teacher"
+        element={
+          <TeacherRoute currentUser={currentUser} currentUserRole={currentUserRole} authLoading={authLoading}>
+            <TeacherApp currentUser={currentUser} onLogout={handleLogout} />
+          </TeacherRoute>
+        }
+      />
+      <Route
+        path="/student"
+        element={
+          <StudentRoute currentUser={currentUser} currentUserRole={currentUserRole} studentData={studentData} authLoading={authLoading}>
+            {currentUser
+              ? <StudentDashboard currentUser={currentUser} onLogout={handleLogout} />
+              : <StudentApp studentData={studentData} onLogout={handleLogout} />
+            }
+          </StudentRoute>
+        }
+      />
+      <Route
+        path="/student/module/:moduleId"
+        element={
+          <StudentRoute currentUser={currentUser} currentUserRole={currentUserRole} studentData={studentData} authLoading={authLoading}>
+            <StudentModuleView onLogout={handleLogout} />
+          </StudentRoute>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
+
+function TeacherApp({ currentUser, onLogout }) {
+  return <TeacherDashboard onLogout={onLogout} currentUser={currentUser} />
+}
+
+function StudentModuleView({ onLogout }) {
+  const { moduleId } = useParams()
+  const { getModule } = useStudent()
+  const navigate = useNavigate()
+  const moduleData = getModule(moduleId)
+
+  if (!moduleData) {
+    // Module not in registry (e.g. direct URL visit without going through dashboard)
+    return <Navigate to="/student" replace />
   }
 
-  if (userType === 'guest') {
-    return (
-      <GuestApp onLeave={handleLogout} />
-    )
-  }
-
-  // student
   return (
     <StudentApp
-      studentData={studentData}
-      onLogout={handleLogout}
+      studentData={moduleData}
+      onLogout={onLogout}
+      onBack={() => navigate('/student')}
     />
   )
 }
 
-/* ── TeacherApp ──────────────────────────────────────────────── */
-function TeacherApp({ currentUser, onLogout }) {
-  const [page, setPage] = useState('chat') // 'chat' | 'dashboard'
-  const [modules, setModules] = useState([])
-  const [selectedModuleId, setSelectedModuleId] = useState(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [documents, setDocuments] = useState([])
-  const handlingPagePopRef = useRef(false)
-  const lastPageRef = useRef(null)
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined
-
-    const stateView = window.history.state?.[NAV_STATE_KEY]
-    if (stateView === 'teacher-dashboard') {
-      setPage('dashboard')
-      lastPageRef.current = 'dashboard'
-    } else {
-      setPage('chat')
-      window.history.replaceState(
-        { ...(window.history.state || {}), [NAV_STATE_KEY]: 'teacher-chat' },
-        '',
-        window.location.href,
-      )
-      lastPageRef.current = 'chat'
-    }
-
-    const onPopState = (event) => {
-      const view = event.state?.[NAV_STATE_KEY]
-      if (view !== 'teacher-chat' && view !== 'teacher-dashboard') return
-      handlingPagePopRef.current = true
-      setPage(view === 'teacher-dashboard' ? 'dashboard' : 'chat')
-    }
-
-    window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
-  }, [])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (lastPageRef.current === null) return
-
-    if (handlingPagePopRef.current) {
-      handlingPagePopRef.current = false
-      lastPageRef.current = page
-      return
-    }
-
-    if (page === lastPageRef.current) return
-
-    window.history.pushState(
-      {
-        ...(window.history.state || {}),
-        [NAV_STATE_KEY]: page === 'dashboard' ? 'teacher-dashboard' : 'teacher-chat',
-      },
-      '',
-      window.location.href,
-    )
-    lastPageRef.current = page
-  }, [page])
-
-  const refreshDocuments = async (moduleId) => {
-    const id = moduleId ?? selectedModuleId
-    if (!id) { setDocuments([]); return }
-    try {
-      const res = await fetch(`http://localhost:8000/modules/${id}/documents`)
-      const data = await res.json()
-      setDocuments(data)
-    } catch {
-      setDocuments([])
-    }
-  }
-
-  const refreshModules = async () => {
-    try {
-      const url = currentUser
-        ? `http://localhost:8000/modules?teacher_uid=${encodeURIComponent(currentUser.uid)}`
-        : 'http://localhost:8000/modules'
-      const res = await fetch(url)
-      const data = await res.json()
-      setModules(data)
-    } catch { /* ignore */ }
-  }
-
-  useEffect(() => { refreshModules() }, [currentUser])
-  useEffect(() => { refreshDocuments(); }, [selectedModuleId])
-
-  const selectedModule = modules.find((m) => m.id === selectedModuleId) ?? null
-
-  if (page === 'dashboard') {
-    return <TeacherDashboard onBack={() => setPage('chat')} onLogout={onLogout} currentUser={currentUser} />
-  }
-
-  return (
-    <div className="flex flex-row h-screen bg-gray-50">
-      <TeacherSidebar
-        open={sidebarOpen}
-        onToggle={() => setSidebarOpen((v) => !v)}
-        modules={modules}
-        selectedModuleId={selectedModuleId}
-        onSelect={setSelectedModuleId}
-        onModuleCreated={refreshModules}
-        documents={documents}
-        onDocumentsChanged={refreshDocuments}
-        currentUser={currentUser}
-        onModulesChanged={refreshModules}
-      />
-
-      <div className="flex flex-col flex-1 min-w-0">
-        <TeacherHeader
-          selectedModule={selectedModule}
-          currentUser={currentUser}
-          onLogout={onLogout}
-          onDashboard={() => setPage('dashboard')}
-        />
-
-        <ChatPanel
-          selectedModuleId={selectedModuleId}
-          userType="teacher"
-          studentData={null}
-        />
-      </div>
-    </div>
+function StudentApp({ studentData, onLogout, onBack = null }) {
+  const storageKey = studentData.courseCode || `${studentData.classId || 'class'}_${studentData.moduleId}`
+  const [sessions, setSessions] = useState(() => {
+    const stored = loadStudentSessions(storageKey)
+    if (stored.length > 0) return stored
+    const first = makeNewSession()
+    saveStudentSessions(storageKey, [first])
+    return [first]
+  })
+  const [activeSessionId, setActiveSessionId] = useState(
+    () => loadStudentSessions(storageKey)[0]?.id ?? ''
   )
-}
-
-/* ── StudentApp ──────────────────────────────────────────────── */
-function StudentApp({ studentData, onLogout }) {
-  // One-time init: load or create first session
-  const initRef = useRef(null)
-  if (!initRef.current) {
-    const stored = loadStudentSessions(studentData.courseCode)
-    if (stored.length > 0) {
-      initRef.current = { sessions: stored, activeId: stored[0].id }
-    } else {
-      const first = makeNewSession()
-      saveStudentSessions(studentData.courseCode, [first])
-      initRef.current = { sessions: [first], activeId: first.id }
-    }
-  }
-
-  const [sessions, setSessions] = useState(initRef.current.sessions)
-  const [activeSessionId, setActiveSessionId] = useState(initRef.current.activeId)
   const teacherName = studentData.teacherName ?? null
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null
@@ -481,7 +155,7 @@ function StudentApp({ studentData, onLogout }) {
     const session = makeNewSession()
     const updated = [session, ...sessions]
     setSessions(updated)
-    saveStudentSessions(studentData.courseCode, updated)
+    saveStudentSessions(storageKey, updated)
     setActiveSessionId(session.id)
   }
 
@@ -495,15 +169,15 @@ function StudentApp({ studentData, onLogout }) {
           : s.title
         return { ...s, messages: msgs, backendSessionId: backendSid ?? s.backendSessionId, title }
       })
-      saveStudentSessions(studentData.courseCode, updated)
+      saveStudentSessions(storageKey, updated)
       return updated
     })
   }
 
   const handleRenameSession = (sessionId, newTitle) => {
     setSessions((prev) => {
-      const updated = prev.map((s) => s.id === sessionId ? { ...s, title: newTitle } : s)
-      saveStudentSessions(studentData.courseCode, updated)
+      const updated = prev.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s))
+      saveStudentSessions(storageKey, updated)
       return updated
     })
   }
@@ -511,7 +185,6 @@ function StudentApp({ studentData, onLogout }) {
   const handleDeleteSession = (sessionId) => {
     setSessions((prev) => {
       const updated = prev.filter((s) => s.id !== sessionId)
-      // If we just deleted the active session, switch to the next one or create a fresh one
       if (activeSessionId === sessionId) {
         const next = updated[0] ?? null
         if (next) {
@@ -522,13 +195,13 @@ function StudentApp({ studentData, onLogout }) {
           setActiveSessionId(fresh.id)
         }
       }
-      saveStudentSessions(studentData.courseCode, updated)
+      saveStudentSessions(storageKey, updated)
       return updated
     })
   }
 
   return (
-    <div className="flex flex-row h-screen bg-gray-50">
+    <div className="flex flex-row h-screen bg-[linear-gradient(145deg,rgba(248,249,250,0.96),rgba(227,236,247,0.82))]">
       <StudentSidebar
         sessions={sessions}
         activeSessionId={activeSessionId}
@@ -536,20 +209,28 @@ function StudentApp({ studentData, onLogout }) {
         onNewSession={handleNewSession}
         onRenameSession={handleRenameSession}
         onDeleteSession={handleDeleteSession}
-        courseCode={studentData.courseCode}
+        courseCode={studentData.courseCode || 'ENROLLED'}
         moduleName={studentData.moduleName}
         teacherName={teacherName}
         onLogout={onLogout}
       />
-      <div className="flex flex-col flex-1 min-w-0 bg-white">
-        {/* Top bar with Leave button */}
-        <div className="flex items-center justify-end px-4 py-2 border-b border-gray-100 flex-shrink-0">
-          <button
+      <div className="flex flex-col flex-1 min-w-0 bg-transparent">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-[rgba(65,90,119,0.18)] bg-[rgba(248,249,250,0.82)] backdrop-blur-sm flex-shrink-0">
+          <div>
+            {onBack && (
+              <Button onClick={onBack} variant="secondary" size="sm">
+                Back to Dashboard
+              </Button>
+            )}
+          </div>
+          <Button
             onClick={onLogout}
-            className="text-sm text-gray-400 hover:text-red-500 font-medium transition-colors px-3 py-1.5 rounded-lg hover:bg-red-50"
+            variant="ghost"
+            size="md"
+            className="text-gray-400 hover:text-red-500 hover:bg-red-50"
           >
-            Leave
-          </button>
+            {APP_COPY.leave}
+          </Button>
         </div>
         {activeSession && (
           <ChatPanel
