@@ -7,6 +7,7 @@ from google.genai import types
 from pydantic import BaseModel
 from typing import Optional
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -98,6 +99,8 @@ class ConversationResponse(BaseModel):
     session_id: str
     error: Optional[bool] = False
     validation: Optional[dict] = None  # Validation metadata from GitHub models
+    flag_category: Optional[str] = None  # unsafe_content | validation_failure | system_error | none
+    flag_severity: Optional[str] = None  # low | medium | high
 
 
 class ModuleCreate(BaseModel):
@@ -144,6 +147,31 @@ class DocumentResponse(BaseModel):
 class TextUpload(BaseModel):
     text: str
     filename: Optional[str] = "pasted_text.txt"
+
+
+class AnalyticsSummaryItem(BaseModel):
+    module_name: Optional[str] = None
+    course_code: Optional[str] = None
+    prompt: str
+    response: str
+    flag_category: Optional[str] = None
+    flag_severity: Optional[str] = None
+    timestamp: Optional[str] = None
+
+
+class AnalyticsSummaryRequest(BaseModel):
+    teacher_uid: str
+    module_filter: Optional[str] = "all"
+    category_filter: Optional[str] = "all"
+    range_filter: Optional[str] = "all"
+    rows: list[AnalyticsSummaryItem] = []
+
+
+class AnalyticsSummaryResponse(BaseModel):
+    summary: str
+    generated_at: str
+    total_rows: int
+    sampled_rows: int
 
 
 # ── Startup ───────────────────────────────────────────────────────────
@@ -224,7 +252,9 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
                     answer="I'm not able to provide that response. Please rephrase your question.",
                     session_id=session_id,
                     validation=validation_result,
-                    error=False
+                    error=False,
+                    flag_category="unsafe_content",
+                    flag_severity="high",
                 )
         except Exception as e:
             # Log validation error but don't block response
@@ -234,7 +264,19 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
         conversations[session_id].append({"role": "user", "content": question})
         conversations[session_id].append({"role": "assistant", "content": answer})
 
-        return ConversationResponse(answer=answer, session_id=session_id, validation=validation_result)
+        flag_category = None
+        flag_severity = None
+        if isinstance(validation_result, dict) and validation_result.get("error"):
+            flag_category = "validation_failure"
+            flag_severity = "medium"
+
+        return ConversationResponse(
+            answer=answer,
+            session_id=session_id,
+            validation=validation_result,
+            flag_category=flag_category,
+            flag_severity=flag_severity,
+        )
 
     except HTTPException:
         raise
@@ -243,6 +285,8 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
             answer=f"Error: {str(e)}",
             session_id=data.session_id or "error",
             error=True,
+            flag_category="system_error",
+            flag_severity="high",
         )
 
 
@@ -277,6 +321,96 @@ async def delete_session(session_id: str):
         del conversations[session_id]
         return {"message": "Session deleted"}
     raise HTTPException(status_code=404, detail="Session not found")
+
+
+# =====================================================================
+#  ANALYTICS ENDPOINTS
+# =====================================================================
+
+def _build_summary_prompt(
+    module_filter: str,
+    category_filter: str,
+    range_filter: str,
+    rows: list[AnalyticsSummaryItem],
+) -> str:
+    lines = []
+    for idx, row in enumerate(rows, 1):
+        prompt = (row.prompt or "").strip().replace("\n", " ")[:280]
+        response = (row.response or "").strip().replace("\n", " ")[:320]
+        module = row.module_name or "Unknown Module"
+        category = row.flag_category or "none"
+        severity = row.flag_severity or "low"
+        lines.append(
+            f"{idx}. module={module} | category={category} | severity={severity}\n"
+            f"   student_prompt={prompt}\n"
+            f"   tutor_response={response}"
+        )
+
+    rows_blob = "\n".join(lines) if lines else "No rows provided."
+
+    return (
+        "You are helping a teacher quickly understand classroom chat trends.\n"
+        "Summarize the provided student-tutor chat logs into practical, actionable insights.\n\n"
+        f"Filters applied: module={module_filter}, category={category_filter}, range={range_filter}\n\n"
+        "Output requirements:\n"
+        "- Keep it concise and teacher-friendly.\n"
+        "- Use exactly these markdown section headers:\n"
+        "  1) ## Key Trends\n"
+        "  2) ## Common Struggles\n"
+        "  3) ## Safety/Policy Signals\n"
+        "  4) ## Suggested Teacher Actions\n"
+        "- In Suggested Teacher Actions, provide 3 bullet points max.\n"
+        "- Do not include personally identifying student information.\n"
+        "- If evidence is weak, say so explicitly.\n\n"
+        "Chat rows:\n"
+        f"{rows_blob}"
+    )
+
+
+@app.post("/analytics/summary", response_model=AnalyticsSummaryResponse)
+async def analytics_summary(body: AnalyticsSummaryRequest):
+    total_rows = len(body.rows)
+    sampled = body.rows[:180]
+
+    if not sampled:
+        return AnalyticsSummaryResponse(
+            summary=(
+                "## Key Trends\nNo recent chat records matched the selected filters.\n\n"
+                "## Common Struggles\nNot enough data yet.\n\n"
+                "## Safety/Policy Signals\nNo signals available.\n\n"
+                "## Suggested Teacher Actions\n- Keep collecting student chat data."
+            ),
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            total_rows=0,
+            sampled_rows=0,
+        )
+
+    prompt = _build_summary_prompt(
+        module_filter=body.module_filter or "all",
+        category_filter=body.category_filter or "all",
+        range_filter=body.range_filter or "all",
+        rows=sampled,
+    )
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                max_output_tokens=700,
+            ),
+        )
+        summary_text = (response.text or "").strip() or "Unable to generate summary."
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate summary: {e}")
+
+    return AnalyticsSummaryResponse(
+        summary=summary_text,
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        total_rows=total_rows,
+        sampled_rows=len(sampled),
+    )
 
 
 # =====================================================================
