@@ -141,18 +141,21 @@ export default function StudentDashboard({ currentUser, onLogout }) {
           const fromClassModules = (moduleMapByClass[classDoc.id] || []).map((m) => ({
             moduleId: m.moduleId,
             moduleName: m.moduleName || 'Module',
+            moduleStatus: m.moduleStatus || 'active',
           }))
           const fromAccess = accessRows
             .filter((a) => a.classId === classDoc.id)
             .map((a) => ({
               moduleId: a.moduleId,
               moduleName: a.moduleName || 'Module',
+              moduleStatus: 'active',
             }))
           const fromCodes = codeRows
             .filter((c) => c.classId === classDoc.id)
             .map((c) => ({
               moduleId: c.moduleId,
               moduleName: c.moduleName || 'Module',
+              moduleStatus: 'active',
             }))
 
           const seen = new Set()
@@ -169,6 +172,7 @@ export default function StudentDashboard({ currentUser, onLogout }) {
               moduleId: m.moduleId,
               moduleName: moduleMeta?.name || m.moduleName || 'Module',
               moduleDescription: moduleMeta?.description || null,
+              moduleStatus: m.moduleStatus || 'active',
               unlocked,
               courseCode: courseCodeByModuleKey[keyFor(classDoc.id, m.moduleId)] || null,
             }
@@ -251,8 +255,9 @@ export default function StudentDashboard({ currentUser, onLogout }) {
             {classCards.map((classCard) => (
               <Card key={classCard.id} className="p-5 border-[rgba(65,90,119,0.24)] bg-[linear-gradient(150deg,rgba(236,241,246,0.92),rgba(223,232,242,0.78))]">
                 {(() => {
-                  const unlockedCount = classCard.modules.filter((m) => m.unlocked).length
-                  const totalCount = classCard.modules.length
+                  const visibleModules = classCard.modules.filter((m) => m.moduleStatus !== 'archived')
+                  const unlockedCount = visibleModules.filter((m) => m.unlocked).length
+                  const totalCount = visibleModules.length
                   const badgeText = unlockedCount === 0
                     ? 'Not activated yet'
                     : `${unlockedCount}/${totalCount} unlocked`
@@ -270,15 +275,15 @@ export default function StudentDashboard({ currentUser, onLogout }) {
                 })()}
 
                 <div className="mt-3 space-y-2">
-                  {classCard.modules.length === 0 ? (
+                  {classCard.modules.filter((m) => m.moduleStatus !== 'archived').length === 0 ? (
                     <div className="rounded-lg border border-dashed border-[rgba(65,90,119,0.28)] bg-white/55 px-3 py-2.5 text-sm text-[var(--color-text-secondary)]">
                       Your instructor has not activated any modules yet.
                     </div>
-                  ) : classCard.modules.filter((m) => m.unlocked).length === 0 ? (
+                  ) : classCard.modules.filter((m) => m.moduleStatus !== 'archived' && m.unlocked).length === 0 ? (
                     <div className="rounded-lg border border-dashed border-[rgba(65,90,119,0.28)] bg-white/55 px-3 py-2.5 text-sm text-[var(--color-text-secondary)]">
                       Your instructor has not activated any modules yet.
                     </div>
-                  ) : classCard.modules.map((module) => (
+                  ) : classCard.modules.filter((module) => module.moduleStatus !== 'archived').map((module) => (
                     <div key={module.moduleId} className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 px-3 py-2.5 flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{module.moduleName}</p>
