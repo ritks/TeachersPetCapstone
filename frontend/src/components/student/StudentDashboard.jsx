@@ -5,6 +5,7 @@ import { db } from '../../firebase'
 import { Badge, Button, Card, Panel } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
 import { useStudent } from '../../contexts/StudentContext'
+import { apiUrl } from '../../lib/api'
 
 function keyFor(classId, moduleId) {
   return `${classId}::${moduleId}`
@@ -81,6 +82,9 @@ export default function StudentDashboard({ currentUser, onLogout }) {
         const codesSettled = await Promise.allSettled([
           getDocs(collection(db, 'courseCodes')),
         ])
+        const modulesMetaSettled = await Promise.allSettled([
+          fetch(apiUrl('/modules')),
+        ])
 
         const moduleMapByClass = {}
         const classNameByClassId = {}
@@ -106,6 +110,14 @@ export default function StudentDashboard({ currentUser, onLogout }) {
         const codeRows = codesSettled[0].status === 'fulfilled'
           ? codesSettled[0].value.docs.map((d) => ({ code: d.id, ...d.data() }))
           : []
+        const moduleRows = modulesMetaSettled[0].status === 'fulfilled'
+          ? await modulesMetaSettled[0].value.json()
+          : []
+        const moduleMetaById = {}
+        ;(Array.isArray(moduleRows) ? moduleRows : []).forEach((moduleItem) => {
+          if (!moduleItem?.id) return
+          moduleMetaById[moduleItem.id] = moduleItem
+        })
 
         const courseCodeByModuleKey = {}
         codeRows.forEach((row) => {
@@ -152,9 +164,11 @@ export default function StudentDashboard({ currentUser, onLogout }) {
 
           const modules = classModules.map((m) => {
             const unlocked = accessMap[keyFor(classDoc.id, m.moduleId)] === true
+            const moduleMeta = moduleMetaById[m.moduleId]
             return {
               moduleId: m.moduleId,
-              moduleName: m.moduleName || 'Module',
+              moduleName: moduleMeta?.name || m.moduleName || 'Module',
+              moduleDescription: moduleMeta?.description || null,
               unlocked,
               courseCode: courseCodeByModuleKey[keyFor(classDoc.id, m.moduleId)] || null,
             }
@@ -268,6 +282,11 @@ export default function StudentDashboard({ currentUser, onLogout }) {
                     <div key={module.moduleId} className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 px-3 py-2.5 flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{module.moduleName}</p>
+                        {module.moduleDescription && (
+                          <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 line-clamp-2">
+                            {module.moduleDescription}
+                          </p>
+                        )}
                         <p className="text-xs text-[var(--color-text-muted)]">{module.unlocked ? 'Unlocked' : 'Locked by teacher'}</p>
                       </div>
                       <Button
@@ -280,6 +299,7 @@ export default function StudentDashboard({ currentUser, onLogout }) {
                             classId: classCard.id,
                             moduleId: module.moduleId,
                             moduleName: module.moduleName,
+                            moduleDescription: module.moduleDescription || null,
                             teacherName: classCard.teacherName || null,
                             courseCode: module.courseCode || 'ENROLLED',
                           }

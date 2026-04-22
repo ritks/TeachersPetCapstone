@@ -209,10 +209,8 @@ function StudentApp({ studentData, onLogout, onBack = null }) {
         onNewSession={handleNewSession}
         onRenameSession={handleRenameSession}
         onDeleteSession={handleDeleteSession}
-        courseCode={studentData.courseCode || 'ENROLLED'}
         moduleName={studentData.moduleName}
         teacherName={teacherName}
-        onLogout={onLogout}
       />
       <div className="flex flex-col flex-1 min-w-0 bg-transparent">
         <div className="flex items-center justify-between px-4 py-2 border-b border-[rgba(65,90,119,0.18)] bg-[rgba(248,249,250,0.82)] backdrop-blur-sm flex-shrink-0">

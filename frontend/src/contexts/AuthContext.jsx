@@ -31,10 +31,10 @@ export function AuthProvider({ children }) {
       try {
         const profile = await _saveUserDoc(user)
         setCurrentUserProfile(profile)
-        setCurrentUserRole(profile?.role || 'teacher')
+        setCurrentUserRole(profile?.role || null)
       } catch {
         setCurrentUserProfile(null)
-        setCurrentUserRole('teacher')
+        setCurrentUserRole(null)
       } finally {
         setAuthLoading(false)
       }
@@ -46,24 +46,29 @@ export function AuthProvider({ children }) {
     const ref = doc(db, 'users', user.uid)
     const existingSnap = await getDoc(ref)
     const existing = existingSnap.exists() ? existingSnap.data() : null
-    const role = existing?.role || roleHint || 'teacher'
+    // Never auto-default to teacher. Role should come from existing profile
+    // or explicit user intent from the selected login/register path.
+    const role = existing?.role ?? roleHint ?? null
+
+    const payload = {
+      email: user.email || existing?.email || '',
+      displayName: user.displayName || existing?.displayName || '',
+      createdAt: existing?.createdAt || serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }
+
+    if (role) payload.role = role
 
     await setDoc(
       ref,
-      {
-        email: user.email,
-        displayName: user.displayName || '',
-        role,
-        createdAt: existing?.createdAt || serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
+      payload,
       { merge: true },
     )
 
     return {
       email: user.email || existing?.email || '',
       displayName: user.displayName || existing?.displayName || '',
-      role,
+      role: role || null,
     }
   }
 

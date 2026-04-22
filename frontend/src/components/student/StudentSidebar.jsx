@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
-import { Badge, Button, Input } from '../ui/primitives'
+import { Button, Input } from '../ui/primitives'
 
-export default function StudentSidebar({ sessions, activeSessionId, onSelectSession, onNewSession, onRenameSession, onDeleteSession, courseCode, moduleName, teacherName, onLogout }) {
+export default function StudentSidebar({ sessions, activeSessionId, onSelectSession, onNewSession, onRenameSession, onDeleteSession, moduleName, teacherName }) {
   const [editingId, setEditingId] = useState(null)
   const [editValue, setEditValue] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
@@ -130,32 +130,23 @@ export default function StudentSidebar({ sessions, activeSessionId, onSelectSess
         </div>
       )}
 
-      <div className="border-t border-[rgba(65,90,119,0.14)] px-4 py-3 flex flex-col gap-2 bg-white/45">
-        {moduleName && (
-          <div className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-[var(--color-brand-600)] flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-            </svg>
-            <span className="truncate font-medium">{moduleName}</span>
-          </div>
-        )}
-        <div className="flex items-center gap-2 min-w-0">
-          <Badge tone="brand" className="font-mono tracking-[0.1em] max-w-[9rem] truncate">
-            {courseCode}
-          </Badge>
-          {teacherName && (
-            <span className="text-xs text-[var(--color-text-muted)] truncate">by {teacherName}</span>
-          )}
+      <div className="border-t border-[rgba(65,90,119,0.14)] px-4 py-3 flex flex-col gap-2.5 bg-white/45">
+        <div className="min-w-0">
+          <p className="text-[0.64rem] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.12em] mb-0.5">
+            Module
+          </p>
+          <p className="text-sm font-medium text-[var(--color-text-primary)] truncate">
+            {moduleName || 'No module selected'}
+          </p>
         </div>
-        <Button
-          onClick={onLogout}
-          variant="secondary"
-          size="sm"
-          className="w-full hover:bg-red-50 hover:text-red-500"
-        >
-          Leave Session
-        </Button>
+        <div className="min-w-0">
+          <p className="text-[0.64rem] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.12em] mb-0.5">
+            Teacher
+          </p>
+          <p className="text-sm text-[var(--color-text-secondary)] truncate">
+            {teacherName || 'Teacher not available'}
+          </p>
+        </div>
       </div>
     </aside>
   )

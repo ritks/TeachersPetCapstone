@@ -85,6 +85,9 @@ function ClassManagementPanel({ currentUser }) {
   const [creatingGroupForClass, setCreatingGroupForClass] = useState(null)
   const [classDetailTab, setClassDetailTab] = useState('roster')
   const [selectedClassId, setSelectedClassId] = useState(null)
+  const [editingModuleDescriptionId, setEditingModuleDescriptionId] = useState(null)
+  const [editingModuleDescriptionValue, setEditingModuleDescriptionValue] = useState('')
+  const [savingModuleDescriptionId, setSavingModuleDescriptionId] = useState(null)
 
   const localClassesKey = currentUser ? `tp_teacher_classes_${currentUser.uid}` : null
   const localLinksKey = currentUser ? `tp_class_modules_${currentUser.uid}` : null
@@ -445,6 +448,58 @@ function ClassManagementPanel({ currentUser }) {
       await refreshData()
     } finally {
       setCreatingModuleForClass(null)
+    }
+  }
+
+  const handleStartEditModuleDescription = (moduleItem) => {
+    setErrorMessage('')
+    setInfoMessage('')
+    setEditingModuleDescriptionId(moduleItem.id)
+    setEditingModuleDescriptionValue(moduleItem.description || '')
+  }
+
+  const handleCancelEditModuleDescription = () => {
+    setEditingModuleDescriptionId(null)
+    setEditingModuleDescriptionValue('')
+  }
+
+  const handleSaveModuleDescription = async ({ classId, moduleItem }) => {
+    if (!currentUser || !moduleItem?.id) return
+
+    setErrorMessage('')
+    setInfoMessage('')
+    setSavingModuleDescriptionId(moduleItem.id)
+
+    try {
+      const response = await fetch(apiUrl(`/modules/${moduleItem.id}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: editingModuleDescriptionValue.trim() || null,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Could not update module description (${response.status})`)
+      }
+
+      const updated = await response.json()
+      setModulesByClass((prev) => ({
+        ...prev,
+        [classId]: (prev[classId] || []).map((row) => (
+          row.id === moduleItem.id
+            ? { ...row, description: updated?.description ?? null }
+            : row
+        )),
+      }))
+
+      setInfoMessage('Module description updated.')
+      setEditingModuleDescriptionId(null)
+      setEditingModuleDescriptionValue('')
+    } catch {
+      setErrorMessage('Could not update module description.')
+    } finally {
+      setSavingModuleDescriptionId(null)
     }
   }
 
@@ -1098,11 +1153,57 @@ function ClassManagementPanel({ currentUser }) {
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
                                       <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{moduleItem.name}</p>
-                                      {moduleItem.description && (
+                                      {editingModuleDescriptionId === moduleItem.id ? (
+                                        <div className="mt-1.5 flex flex-col gap-2">
+                                          <Input
+                                            value={editingModuleDescriptionValue}
+                                            onChange={(e) => setEditingModuleDescriptionValue(e.target.value)}
+                                            placeholder="Module description (optional)"
+                                            className="text-xs"
+                                          />
+                                          <div className="flex gap-1.5">
+                                            <Button
+                                              type="button"
+                                              variant="primary"
+                                              size="sm"
+                                              disabled={savingModuleDescriptionId === moduleItem.id}
+                                              onClick={() => handleSaveModuleDescription({
+                                                classId: classItem.id,
+                                                moduleItem,
+                                              })}
+                                            >
+                                              {savingModuleDescriptionId === moduleItem.id ? 'Saving...' : 'Save'}
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              variant="secondary"
+                                              size="sm"
+                                              disabled={savingModuleDescriptionId === moduleItem.id}
+                                              onClick={handleCancelEditModuleDescription}
+                                            >
+                                              Cancel
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ) : moduleItem.description ? (
                                         <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 line-clamp-2">{moduleItem.description}</p>
+                                      ) : (
+                                        <p className="text-xs text-[var(--color-text-muted)] mt-0.5 italic">No description yet.</p>
                                       )}
                                     </div>
-                                    <Badge tone="neutral">Module</Badge>
+                                    <div className="flex items-center gap-1.5">
+                                      <Badge tone="neutral">Module</Badge>
+                                      {editingModuleDescriptionId !== moduleItem.id && (
+                                        <Button
+                                          type="button"
+                                          variant="secondary"
+                                          size="sm"
+                                          onClick={() => handleStartEditModuleDescription(moduleItem)}
+                                        >
+                                          Edit Description
+                                        </Button>
+                                      )}
+                                    </div>
                                   </div>
 
                                   <div className="mt-2.5 flex items-center justify-between gap-2">
