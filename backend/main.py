@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 import os
+import json
+import time
 from dotenv import load_dotenv
 from google.genai import types
 from pydantic import BaseModel
@@ -22,6 +24,11 @@ from rag.validator import ResponseValidator
 load_dotenv()
 
 app = FastAPI(title="Teachers Pet - Math Tutor")
+
+try:
+    import redis as redis_lib
+except Exception:
+    redis_lib = None
 
 # ── CORS ──────────────────────────────────────────────────────────────
 _allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
@@ -78,8 +85,99 @@ SAFETY_SETTINGS = [
     types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_LOW_AND_ABOVE"),
 ]
 
-# ── In-memory session store ──────────────────────────────────────────
-conversations: dict = {}
+# ── Session store (Redis + TTL, with memory fallback) ───────────────
+CHAT_SESSION_TTL_SECONDS = int(os.getenv("CHAT_SESSION_TTL_SECONDS", "86400"))
+REDIS_URL = os.getenv("REDIS_URL")
+
+
+class MemorySessionStore:
+    def __init__(self, ttl_seconds: int):
+        self.ttl_seconds = ttl_seconds
+        self._sessions: dict[str, dict] = {}
+
+    def _purge_expired(self):
+        now = time.time()
+        expired = [
+            sid for sid, row in self._sessions.items()
+            if row.get("expires_at", 0) <= now
+        ]
+        for sid in expired:
+            del self._sessions[sid]
+
+    def get_history(self, session_id: str) -> Optional[list[dict]]:
+        self._purge_expired()
+        row = self._sessions.get(session_id)
+        if not row:
+            return None
+        return row.get("history", [])
+
+    def append_messages(self, session_id: str, messages: list[dict]) -> list[dict]:
+        self._purge_expired()
+        row = self._sessions.get(session_id) or {"history": []}
+        history = row.get("history", [])
+        history.extend(messages)
+        self._sessions[session_id] = {
+            "history": history,
+            "expires_at": time.time() + self.ttl_seconds,
+        }
+        return history
+
+    def delete(self, session_id: str) -> bool:
+        self._purge_expired()
+        if session_id in self._sessions:
+            del self._sessions[session_id]
+            return True
+        return False
+
+
+class RedisSessionStore:
+    KEY_PREFIX = "tp:chat:"
+
+    def __init__(self, redis_url: str, ttl_seconds: int):
+        self.ttl_seconds = ttl_seconds
+        self.client = redis_lib.Redis.from_url(redis_url, decode_responses=True)
+        # validate connection at startup
+        self.client.ping()
+
+    def _key(self, session_id: str) -> str:
+        return f"{self.KEY_PREFIX}{session_id}"
+
+    def get_history(self, session_id: str) -> Optional[list[dict]]:
+        raw = self.client.get(self._key(session_id))
+        if not raw:
+            return None
+        history = json.loads(raw)
+        # sliding expiration
+        self.client.expire(self._key(session_id), self.ttl_seconds)
+        return history
+
+    def append_messages(self, session_id: str, messages: list[dict]) -> list[dict]:
+        key = self._key(session_id)
+        raw = self.client.get(key)
+        history = json.loads(raw) if raw else []
+        history.extend(messages)
+        self.client.setex(key, self.ttl_seconds, json.dumps(history))
+        return history
+
+    def delete(self, session_id: str) -> bool:
+        return self.client.delete(self._key(session_id)) > 0
+
+
+def _build_session_store():
+    if REDIS_URL and redis_lib:
+        try:
+            print(f"[INFO] Using Redis chat sessions with TTL={CHAT_SESSION_TTL_SECONDS}s")
+            return RedisSessionStore(REDIS_URL, CHAT_SESSION_TTL_SECONDS)
+        except Exception as e:
+            print(f"[WARN] Redis unavailable, falling back to memory sessions: {e}")
+    elif REDIS_URL and not redis_lib:
+        print("[WARN] REDIS_URL set but redis package is missing. Falling back to memory sessions.")
+
+    print(f"[INFO] Using in-memory chat sessions with TTL={CHAT_SESSION_TTL_SECONDS}s")
+    return MemorySessionStore(CHAT_SESSION_TTL_SECONDS)
+
+
+session_store = _build_session_store()
 
 
 # ── Pydantic schemas ─────────────────────────────────────────────────
@@ -197,10 +295,7 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail="Please provide a question")
 
         session_id = data.session_id or str(uuid.uuid4())
-        if session_id not in conversations:
-            conversations[session_id] = []
-
-        history = conversations[session_id]
+        history = session_store.get_history(session_id) or []
 
         # ---- build system prompt (base + optional RAG context) --------
         system_prompt = BASE_SYSTEM_PROMPT
@@ -261,8 +356,13 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
             print(f"[ERROR] Validation failed: {e}")
             validation_result = {"error": str(e)}
 
-        conversations[session_id].append({"role": "user", "content": question})
-        conversations[session_id].append({"role": "assistant", "content": answer})
+        session_store.append_messages(
+            session_id,
+            [
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": answer},
+            ],
+        )
 
         flag_category = None
         flag_severity = None
@@ -310,15 +410,15 @@ async def ask(data: dict):
 
 @app.get("/session/{session_id}")
 async def get_session(session_id: str):
-    if session_id not in conversations:
+    history = session_store.get_history(session_id)
+    if not history:
         raise HTTPException(status_code=404, detail="Session not found")
-    return {"session_id": session_id, "history": conversations[session_id]}
+    return {"session_id": session_id, "history": history}
 
 
 @app.delete("/session/{session_id}")
 async def delete_session(session_id: str):
-    if session_id in conversations:
-        del conversations[session_id]
+    if session_store.delete(session_id):
         return {"message": "Session deleted"}
     raise HTTPException(status_code=404, detail="Session not found")
 

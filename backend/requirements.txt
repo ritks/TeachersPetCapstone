@@ -10,6 +10,7 @@ chromadb
 requests
 openpyxl
 httpx
+redis
 
 # Testing
 pytest
