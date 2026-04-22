@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
+import { apiUrl } from '../lib/api'
 
 function fmtTime(ts) {
   if (!ts) return '—'
@@ -12,6 +13,57 @@ function fmtTime(ts) {
 function getBlockedSignal(text) {
   const val = String(text || '').toLowerCase()
   return val.includes('not able to provide that response') || val.includes('please rephrase your question')
+}
+
+const CATEGORY_LABELS = {
+  unsafe_content: 'Unsafe Content',
+  misuse: 'Misuse',
+  validation_failure: 'Validation Failure',
+  system_error: 'System Error',
+  quality_error: 'Quality Error',
+  none: 'Normal',
+}
+
+const CATEGORY_SEVERITY = {
+  unsafe_content: 'high',
+  misuse: 'high',
+  validation_failure: 'medium',
+  system_error: 'high',
+  quality_error: 'medium',
+  none: 'low',
+}
+
+function getFlagMeta(row) {
+  const explicitCategory = String(row.flagCategory || '').trim()
+  const explicitSeverity = String(row.flagSeverity || '').trim()
+
+  if (explicitCategory) {
+    const category = explicitCategory
+    const severity = explicitSeverity || CATEGORY_SEVERITY[category] || 'medium'
+    const flagged = category !== 'none'
+    return {
+      category,
+      severity,
+      flagged,
+      label: CATEGORY_LABELS[category] || category,
+    }
+  }
+
+  if (getBlockedSignal(row.response)) {
+    return {
+      category: 'unsafe_content',
+      severity: 'high',
+      flagged: true,
+      label: CATEGORY_LABELS.unsafe_content,
+    }
+  }
+
+  return {
+    category: 'none',
+    severity: 'low',
+    flagged: false,
+    label: CATEGORY_LABELS.none,
+  }
 }
 
 function getLearnerKey(promptRow) {
@@ -38,9 +90,14 @@ export default function AnalyticsDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filterModule, setFilterModule] = useState('all')
+  const [filterCategory, setFilterCategory] = useState('all')
   const [filterRange, setFilterRange] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedRows, setExpandedRows] = useState({})
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const [summaryError, setSummaryError] = useState('')
+  const [aiSummary, setAiSummary] = useState('')
+  const [summaryMeta, setSummaryMeta] = useState(null)
 
   useEffect(() => {
     if (!currentUser) return
@@ -78,11 +135,27 @@ export default function AnalyticsDashboard() {
     [prompts],
   )
 
+  const categoryOptions = useMemo(
+    () => [
+      ...new Map(
+        prompts.map((row) => {
+          const meta = getFlagMeta(row)
+          return [meta.category, meta.label]
+        }),
+      ).entries(),
+    ],
+    [prompts],
+  )
+
   const filtered = useMemo(() => {
     const now = Date.now()
     const search = searchTerm.trim().toLowerCase()
     return prompts.filter((row) => {
       if (filterModule !== 'all' && row.moduleId !== filterModule) return false
+      if (filterCategory !== 'all') {
+        const meta = getFlagMeta(row)
+        if (meta.category !== filterCategory) return false
+      }
 
       const ts = row.timestamp?.toMillis?.() ?? 0
       if (filterRange === '7d' && ts < now - 7 * 24 * 60 * 60 * 1000) return false
@@ -102,7 +175,7 @@ export default function AnalyticsDashboard() {
 
       return true
     })
-  }, [filterModule, filterRange, prompts, searchTerm])
+  }, [filterCategory, filterModule, filterRange, prompts, searchTerm])
 
   const analytics = useMemo(() => {
     const sessions = new Set(filtered.map((p) => p.sessionId).filter(Boolean))
@@ -134,7 +207,8 @@ export default function AnalyticsDashboard() {
 
     const blockedByLearner = {}
     filtered.forEach((row) => {
-      if (!getBlockedSignal(row.response)) return
+      const meta = getFlagMeta(row)
+      if (!meta.flagged) return
       const learner = getLearnerKey(row)
       if (!learner) return
       blockedByLearner[learner] = (blockedByLearner[learner] || 0) + 1
@@ -157,13 +231,63 @@ export default function AnalyticsDashboard() {
   const tableRows = useMemo(
     () => filtered.map((row) => ({
       ...row,
-      status: getBlockedSignal(row.response) ? 'Needs Review' : 'Normal',
+      flagMeta: getFlagMeta(row),
+      status: getFlagMeta(row).flagged ? 'Needs Review' : 'Normal',
     })),
     [filtered],
   )
 
   const toggleExpanded = (id) => {
     setExpandedRows((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const handleGenerateSummary = async () => {
+    if (!currentUser?.uid || summaryLoading) return
+    setSummaryLoading(true)
+    setSummaryError('')
+
+    try {
+      const sampledRows = filtered.slice(0, 180).map((row) => {
+        const meta = getFlagMeta(row)
+        return {
+          module_name: row.moduleName || null,
+          course_code: row.courseCode || null,
+          prompt: row.prompt || '',
+          response: row.response || '',
+          flag_category: meta.category,
+          flag_severity: meta.severity,
+          timestamp: row.timestamp?.toDate?.()?.toISOString?.() || null,
+        }
+      })
+
+      const res = await fetch(apiUrl('/analytics/summary'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teacher_uid: currentUser.uid,
+          module_filter: filterModule,
+          category_filter: filterCategory,
+          range_filter: filterRange,
+          rows: sampledRows,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data?.detail || 'Summary request failed')
+      }
+
+      setAiSummary(data.summary || '')
+      setSummaryMeta({
+        generatedAt: data.generated_at || null,
+        totalRows: data.total_rows ?? filtered.length,
+        sampledRows: data.sampled_rows ?? sampledRows.length,
+      })
+    } catch (err) {
+      setSummaryError(err?.message || 'Could not generate summary.')
+    } finally {
+      setSummaryLoading(false)
+    }
   }
 
   return (
@@ -196,10 +320,51 @@ export default function AnalyticsDashboard() {
         </div>
       )}
 
+      <section className="rounded-xl border border-[rgba(65,90,119,0.2)] bg-[linear-gradient(150deg,rgba(248,249,250,0.94),rgba(234,241,248,0.82))] p-4">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+          <div>
+            <p className="text-[0.72rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">AI Summary</p>
+            <h4 className="text-lg font-semibold text-[var(--color-text-primary)] mt-1">Classroom Trend Snapshot</h4>
+            <p className="text-sm text-[var(--color-text-secondary)] mt-1">
+              Generate a quick AI summary from the currently filtered chat logs.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={summaryLoading}
+            onClick={handleGenerateSummary}
+            className="inline-flex items-center justify-center rounded-lg border border-[rgba(65,90,119,0.24)] bg-white px-3 py-2 text-sm font-medium text-[var(--color-text-primary)] hover:bg-[rgba(236,241,246,0.78)] disabled:opacity-60"
+          >
+            {summaryLoading ? 'Generating...' : (aiSummary ? 'Refresh Summary' : 'Generate Summary')}
+          </button>
+        </div>
+
+        {summaryError && (
+          <div className="mt-3 rounded-lg border border-[rgba(220,38,38,0.25)] bg-[rgba(254,242,242,0.8)] px-3 py-2 text-sm text-[var(--color-danger-600)]">
+            {summaryError}
+          </div>
+        )}
+
+        {aiSummary ? (
+          <div className="mt-3 rounded-lg border border-[rgba(65,90,119,0.16)] bg-white/75 p-3">
+            <pre className="whitespace-pre-wrap text-sm text-[var(--color-text-secondary)] font-sans leading-6">{aiSummary}</pre>
+            {summaryMeta && (
+              <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                Generated: {fmtTime(summaryMeta.generatedAt)} · Sampled {summaryMeta.sampledRows} of {summaryMeta.totalRows} rows
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-[var(--color-text-muted)]">
+            No summary yet. Generate one to see key trends, common struggles, and suggested actions.
+          </p>
+        )}
+      </section>
+
       <section className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_290px] gap-4">
         <div className="space-y-3">
           <div className="sticky top-0 z-10 rounded-xl border border-[rgba(65,90,119,0.2)] bg-[rgba(248,249,250,0.86)] backdrop-blur-md p-3">
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_220px] gap-2.5">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_220px_220px] gap-2.5">
               <select
                 value={filterModule}
                 onChange={(e) => setFilterModule(e.target.value)}
@@ -219,6 +384,17 @@ export default function AnalyticsDashboard() {
                 <option value="all">All time</option>
                 <option value="30d">Last 30 days</option>
                 <option value="7d">Last 7 days</option>
+              </select>
+
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="rounded-lg border border-[rgba(65,90,119,0.24)] bg-white px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[rgba(65,90,119,0.36)]"
+              >
+                <option value="all">All categories</option>
+                {categoryOptions.map(([id, label]) => (
+                  <option key={id} value={id}>{label}</option>
+                ))}
               </select>
 
               <input
@@ -250,6 +426,7 @@ export default function AnalyticsDashboard() {
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-36">Time</th>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-28">Code</th>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-40">Module</th>
+                      <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-40">Category</th>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-32">Status</th>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] min-w-[240px]">Student Prompt</th>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] min-w-[260px]">Tutor Response</th>
@@ -264,7 +441,10 @@ export default function AnalyticsDashboard() {
                           <td className="px-3 py-2.5 text-[var(--color-text-secondary)] font-mono whitespace-nowrap">{row.courseCode || '—'}</td>
                           <td className="px-3 py-2.5 text-[var(--color-text-secondary)] whitespace-nowrap">{row.moduleName || (row.moduleId ? `${row.moduleId.slice(0, 8)}…` : '—')}</td>
                           <td className="px-3 py-2.5">
-                            <StatusBadge status={row.status} />
+                            <CategoryBadge label={row.flagMeta.label} flagged={row.flagMeta.flagged} />
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <StatusBadge status={row.status} severity={row.flagMeta.severity} />
                           </td>
                           <td className="px-3 py-2.5 text-[var(--color-text-primary)] align-top">
                             <p className={isExpanded ? '' : 'line-clamp-2'}>{row.prompt || '—'}</p>
@@ -354,11 +534,30 @@ function InsightCard({ title, value, sub }) {
   )
 }
 
-function StatusBadge({ status }) {
+function CategoryBadge({ label, flagged }) {
+  return (
+    <span
+      className={
+        flagged
+          ? 'inline-flex items-center rounded-full border border-[rgba(186,147,74,0.28)] bg-[rgba(255,251,235,0.92)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-warning-700)]'
+          : 'inline-flex items-center rounded-full border border-[rgba(45,106,79,0.22)] bg-[rgba(240,253,244,0.9)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-success-700)]'
+      }
+    >
+      {label}
+    </span>
+  )
+}
+
+function StatusBadge({ status, severity = 'low' }) {
   const isReview = status === 'Needs Review'
+  const isHigh = severity === 'high'
+  const reviewTone = isHigh
+    ? 'inline-flex items-center rounded-full border border-[rgba(220,38,38,0.25)] bg-[rgba(254,242,242,0.9)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-danger-600)]'
+    : 'inline-flex items-center rounded-full border border-[rgba(186,147,74,0.28)] bg-[rgba(255,251,235,0.92)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-warning-700)]'
+
   return (
     <span className={isReview
-      ? 'inline-flex items-center rounded-full border border-[rgba(220,38,38,0.25)] bg-[rgba(254,242,242,0.9)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-danger-600)]'
+      ? reviewTone
       : 'inline-flex items-center rounded-full border border-[rgba(45,106,79,0.25)] bg-[rgba(240,253,244,0.9)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-success-700)]'
     }
     >

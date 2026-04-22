@@ -85,6 +85,11 @@ function ClassManagementPanel({ currentUser }) {
   const [creatingGroupForClass, setCreatingGroupForClass] = useState(null)
   const [classDetailTab, setClassDetailTab] = useState('roster')
   const [selectedClassId, setSelectedClassId] = useState(null)
+  const [editingModuleDescriptionId, setEditingModuleDescriptionId] = useState(null)
+  const [editingModuleDescriptionValue, setEditingModuleDescriptionValue] = useState('')
+  const [savingModuleDescriptionId, setSavingModuleDescriptionId] = useState(null)
+  const [moduleSearchTerm, setModuleSearchTerm] = useState('')
+  const [moduleStatusFilter, setModuleStatusFilter] = useState('all')
 
   const localClassesKey = currentUser ? `tp_teacher_classes_${currentUser.uid}` : null
   const localLinksKey = currentUser ? `tp_class_modules_${currentUser.uid}` : null
@@ -208,13 +213,17 @@ function ClassManagementPanel({ currentUser }) {
 
       const moduleGroups = {}
       const classModuleDocs = classModulesState.status === 'fulfilled' ? classModulesState.value.docs : []
-      const remoteLinks = classModuleDocs.map((d) => d.data())
+      const remoteLinks = classModuleDocs.map((d) => ({ id: d.id, ...d.data() }))
       const localLinks = readLocal(localLinksKey, [])
       const allLinks = [...remoteLinks, ...localLinks]
       allLinks.forEach((data) => {
         if (!data.classId || !data.moduleId || !moduleMap[data.moduleId]) return
         if (!moduleGroups[data.classId]) moduleGroups[data.classId] = []
-        moduleGroups[data.classId].push(moduleMap[data.moduleId])
+        moduleGroups[data.classId].push({
+          ...moduleMap[data.moduleId],
+          classModuleDocId: data.id || null,
+          moduleStatus: data.moduleStatus || 'active',
+        })
       })
       Object.keys(moduleGroups).forEach((classId) => {
         moduleGroups[classId].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
@@ -354,6 +363,11 @@ function ClassManagementPanel({ currentUser }) {
     }
   }, [selectedClassId])
 
+  useEffect(() => {
+    setModuleSearchTerm('')
+    setModuleStatusFilter('all')
+  }, [selectedClassId])
+
   const handleCreateClass = async (e) => {
     e.preventDefault()
     if (!currentUser || creatingClass) return
@@ -423,16 +437,19 @@ function ClassManagementPanel({ currentUser }) {
             className: classRef?.name || null,
             moduleId: created.id,
             moduleName: created.name,
+            moduleStatus: 'active',
             teacherUid: currentUser.uid,
             createdAt: serverTimestamp(),
           })
         } catch {
           const localLinks = readLocal(localLinksKey, [])
           localLinks.unshift({
+            id: `local-link-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             classId,
             className: classRef?.name || null,
             moduleId: created.id,
             moduleName: created.name,
+            moduleStatus: 'active',
             teacherUid: currentUser.uid,
             createdAt: Date.now(),
           })
@@ -445,6 +462,111 @@ function ClassManagementPanel({ currentUser }) {
       await refreshData()
     } finally {
       setCreatingModuleForClass(null)
+    }
+  }
+
+  const handleStartEditModuleDescription = (moduleItem) => {
+    setErrorMessage('')
+    setInfoMessage('')
+    setEditingModuleDescriptionId(moduleItem.id)
+    setEditingModuleDescriptionValue(moduleItem.description || '')
+  }
+
+  const handleCancelEditModuleDescription = () => {
+    setEditingModuleDescriptionId(null)
+    setEditingModuleDescriptionValue('')
+  }
+
+  const handleSaveModuleDescription = async ({ classId, moduleItem }) => {
+    if (!currentUser || !moduleItem?.id) return
+
+    setErrorMessage('')
+    setInfoMessage('')
+    setSavingModuleDescriptionId(moduleItem.id)
+
+    try {
+      const response = await fetch(apiUrl(`/modules/${moduleItem.id}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: editingModuleDescriptionValue.trim() || null,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Could not update module description (${response.status})`)
+      }
+
+      const updated = await response.json()
+      setModulesByClass((prev) => ({
+        ...prev,
+        [classId]: (prev[classId] || []).map((row) => (
+          row.id === moduleItem.id
+            ? { ...row, description: updated?.description ?? null }
+            : row
+        )),
+      }))
+
+      setInfoMessage('Module description updated.')
+      setEditingModuleDescriptionId(null)
+      setEditingModuleDescriptionValue('')
+    } catch {
+      setErrorMessage('Could not update module description.')
+    } finally {
+      setSavingModuleDescriptionId(null)
+    }
+  }
+
+  const handleToggleModuleArchive = async ({ classId, moduleItem }) => {
+    if (!currentUser || !classId || !moduleItem?.id) return
+    const nextStatus = moduleItem.moduleStatus === 'archived' ? 'active' : 'archived'
+
+    setErrorMessage('')
+    setInfoMessage('')
+
+    try {
+      try {
+        if (moduleItem.classModuleDocId && !String(moduleItem.classModuleDocId).startsWith('local-')) {
+          await setDoc(doc(db, 'classModules', moduleItem.classModuleDocId), {
+            moduleStatus: nextStatus,
+            updatedAt: serverTimestamp(),
+          }, { merge: true })
+        } else {
+          throw new Error('No remote class module doc available')
+        }
+      } catch {
+        const localLinks = readLocal(localLinksKey, [])
+        const idx = localLinks.findIndex((row) => row.classId === classId && row.moduleId === moduleItem.id)
+        const patch = {
+          moduleStatus: nextStatus,
+          updatedAt: Date.now(),
+        }
+        if (idx >= 0) {
+          localLinks[idx] = { ...localLinks[idx], ...patch }
+        } else {
+          localLinks.unshift({
+            id: `local-link-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            classId,
+            className: classes.find((c) => c.id === classId)?.name || null,
+            moduleId: moduleItem.id,
+            moduleName: moduleItem.name || null,
+            moduleStatus: nextStatus,
+            teacherUid: currentUser.uid,
+            updatedAt: Date.now(),
+          })
+        }
+        writeLocal(localLinksKey, localLinks)
+        setInfoMessage('Module status saved locally (cloud permissions blocked).')
+      }
+
+      setModulesByClass((prev) => ({
+        ...prev,
+        [classId]: (prev[classId] || []).map((row) => (
+          row.id === moduleItem.id ? { ...row, moduleStatus: nextStatus } : row
+        )),
+      }))
+    } catch {
+      setErrorMessage('Could not update module archive status.')
     }
   }
 
@@ -859,6 +981,19 @@ function ClassManagementPanel({ currentUser }) {
               const classItem = classes.find((c) => c.id === selectedClassId)
               if (!classItem) return null
               const classModules = modulesByClass[classItem.id] || []
+              const filteredModules = classModules.filter((moduleItem) => {
+                const status = moduleItem.moduleStatus || 'active'
+                if (moduleStatusFilter !== 'all' && status !== moduleStatusFilter) return false
+                if (moduleSearchTerm.trim()) {
+                  const needle = moduleSearchTerm.trim().toLowerCase()
+                  const haystack = [
+                    moduleItem.name,
+                    moduleItem.description,
+                  ].join(' ').toLowerCase()
+                  if (!haystack.includes(needle)) return false
+                }
+                return true
+              })
               const insight = insightsByClass[classItem.id] || { modules: 0, activeStudents: 0, totalPrompts: 0, latestTs: 0 }
               const draft = getModuleDraft(classItem.id)
               const classStudents = studentsByClass[classItem.id] || []
@@ -1051,6 +1186,23 @@ function ClassManagementPanel({ currentUser }) {
                           </Button>
                         </div>
 
+                        <div className="mt-2 grid grid-cols-1 md:grid-cols-[1fr_180px] gap-2">
+                          <Input
+                            value={moduleSearchTerm}
+                            onChange={(e) => setModuleSearchTerm(e.target.value)}
+                            placeholder="Search modules..."
+                          />
+                          <select
+                            value={moduleStatusFilter}
+                            onChange={(e) => setModuleStatusFilter(e.target.value)}
+                            className="rounded-lg border border-[rgba(65,90,119,0.24)] bg-white px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[rgba(65,90,119,0.36)]"
+                          >
+                            <option value="all">All Statuses</option>
+                            <option value="active">Active</option>
+                            <option value="archived">Archived</option>
+                          </select>
+                        </div>
+
                         {draft.open && (
                           <div className="mt-3 rounded-xl border border-[rgba(65,90,119,0.22)] bg-white/80 p-3">
                             <div className="grid grid-cols-1 gap-2">
@@ -1083,8 +1235,12 @@ function ClassManagementPanel({ currentUser }) {
                             <div className="rounded-lg border border-dashed border-[rgba(65,90,119,0.28)] bg-white/55 px-3 py-2.5 text-sm text-[var(--color-text-secondary)]">
                               No modules yet for this class.
                             </div>
+                          ) : filteredModules.length === 0 ? (
+                            <div className="rounded-lg border border-dashed border-[rgba(65,90,119,0.28)] bg-white/55 px-3 py-2.5 text-sm text-[var(--color-text-secondary)]">
+                              No modules match this filter.
+                            </div>
                           ) : (
-                            classModules.map((moduleItem) => {
+                            filteredModules.map((moduleItem) => {
                               const assignedGroups = moduleGroupAccess[moduleGroupKey(classItem.id, moduleItem.id)] || []
                               const allowedEmails = new Set(
                                 classGroups
@@ -1098,11 +1254,70 @@ function ClassManagementPanel({ currentUser }) {
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
                                       <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{moduleItem.name}</p>
-                                      {moduleItem.description && (
+                                      {editingModuleDescriptionId === moduleItem.id ? (
+                                        <div className="mt-1.5 flex flex-col gap-2">
+                                          <Input
+                                            value={editingModuleDescriptionValue}
+                                            onChange={(e) => setEditingModuleDescriptionValue(e.target.value)}
+                                            placeholder="Module description (optional)"
+                                            className="text-xs"
+                                          />
+                                          <div className="flex gap-1.5">
+                                            <Button
+                                              type="button"
+                                              variant="primary"
+                                              size="sm"
+                                              disabled={savingModuleDescriptionId === moduleItem.id}
+                                              onClick={() => handleSaveModuleDescription({
+                                                classId: classItem.id,
+                                                moduleItem,
+                                              })}
+                                            >
+                                              {savingModuleDescriptionId === moduleItem.id ? 'Saving...' : 'Save'}
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              variant="secondary"
+                                              size="sm"
+                                              disabled={savingModuleDescriptionId === moduleItem.id}
+                                              onClick={handleCancelEditModuleDescription}
+                                            >
+                                              Cancel
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ) : moduleItem.description ? (
                                         <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 line-clamp-2">{moduleItem.description}</p>
+                                      ) : (
+                                        <p className="text-xs text-[var(--color-text-muted)] mt-0.5 italic">No description yet.</p>
                                       )}
                                     </div>
-                                    <Badge tone="neutral">Module</Badge>
+                                    <div className="flex items-center gap-1.5">
+                                      <Badge tone={moduleItem.moduleStatus === 'archived' ? 'warning' : 'neutral'}>
+                                        {moduleItem.moduleStatus === 'archived' ? 'Archived' : 'Module'}
+                                      </Badge>
+                                      {editingModuleDescriptionId !== moduleItem.id && (
+                                        <Button
+                                          type="button"
+                                          variant="secondary"
+                                          size="sm"
+                                          onClick={() => handleStartEditModuleDescription(moduleItem)}
+                                        >
+                                          Edit Description
+                                        </Button>
+                                      )}
+                                      <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => handleToggleModuleArchive({
+                                          classId: classItem.id,
+                                          moduleItem,
+                                        })}
+                                      >
+                                        {moduleItem.moduleStatus === 'archived' ? 'Restore' : 'Archive'}
+                                      </Button>
+                                    </div>
                                   </div>
 
                                   <div className="mt-2.5 flex items-center justify-between gap-2">

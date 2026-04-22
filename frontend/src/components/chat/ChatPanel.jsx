@@ -399,12 +399,15 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, ses
         body: JSON.stringify(body),
       })
       const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data?.detail || 'Chat request failed')
+      }
       setSessionId(data.session_id)
       const finalMessages = [...withQuestion, { role: 'tutor', content: data.answer, isError: data.error }]
       setMessages(finalMessages)
       if (onMessagesUpdate) onMessagesUpdate(finalMessages, data.session_id)
 
-      if (userType === 'student' && studentData && !data.error) {
+      if (userType === 'student' && studentData) {
         addDoc(collection(db, 'prompts'), {
           courseCode: studentData.courseCode ?? null,
           moduleId: selectedModuleId ?? null,
@@ -413,6 +416,8 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, ses
           sessionId: data.session_id,
           prompt: question,
           response: data.answer,
+          flagCategory: data.flag_category ?? null,
+          flagSeverity: data.flag_severity ?? null,
           timestamp: serverTimestamp(),
         }).catch(() => { /* swallow */ })
       }
@@ -427,6 +432,20 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, ses
       ]
       setMessages(errMessages)
       if (onMessagesUpdate) onMessagesUpdate(errMessages, sessionId)
+      if (userType === 'student' && studentData) {
+        addDoc(collection(db, 'prompts'), {
+          courseCode: studentData.courseCode ?? null,
+          moduleId: selectedModuleId ?? null,
+          moduleName: studentData.moduleName ?? null,
+          teacherUid: studentData.teacherUid ?? null,
+          sessionId: sessionId ?? null,
+          prompt: question,
+          response: CHAT_COPY.serverError,
+          flagCategory: 'system_error',
+          flagSeverity: 'high',
+          timestamp: serverTimestamp(),
+        }).catch(() => { /* swallow */ })
+      }
     } finally {
       setLoading(false)
     }
