@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import AnalyticsDashboard from '../AnalyticsDashboard'
 import { addDoc, collection, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { Badge, Button, Card, Input, Panel } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
 import { apiUrl } from '../../lib/api'
+import DocumentPanel from './DocumentPanel'
 
 function DashboardStat({ label, value, tone }) {
   const tones = {
@@ -63,6 +64,8 @@ function ClassManagementPanel({ currentUser }) {
   const [loading, setLoading] = useState(true)
   const [classes, setClasses] = useState([])
   const [modulesByClass, setModulesByClass] = useState({})
+  const [documentsByModule, setDocumentsByModule] = useState({})
+  const [openDocumentsByModule, setOpenDocumentsByModule] = useState({})
   const [insightsByClass, setInsightsByClass] = useState({})
   const [showCreateClassForm, setShowCreateClassForm] = useState(false)
   const [creatingClass, setCreatingClass] = useState(false)
@@ -131,6 +134,27 @@ function ClassManagementPanel({ currentUser }) {
 
   const moduleGroupKey = (classId, moduleId) => `${classId}::${moduleId}`
   const moduleStudentKey = (classId, moduleId, studentEmail) => `${classId}::${moduleId}::${studentEmail}`
+
+  const fetchDocumentsForModule = async (moduleId) => {
+    try {
+      const res = await fetch(apiUrl(`/modules/${moduleId}/documents`))
+      const data = await res.json()
+      const docs = Array.isArray(data) ? data : []
+      setDocumentsByModule((prev) => ({ ...prev, [moduleId]: docs }))
+      return docs
+    } catch {
+      setDocumentsByModule((prev) => ({ ...prev, [moduleId]: [] }))
+      return []
+    }
+  }
+
+  const refreshAllOpenDocuments = async () => {
+    const moduleIds = Object.entries(openDocumentsByModule)
+      .filter(([, isOpen]) => Boolean(isOpen))
+      .map(([moduleId]) => moduleId)
+    if (moduleIds.length === 0) return
+    await Promise.all(moduleIds.map((moduleId) => fetchDocumentsForModule(moduleId)))
+  }
 
   const refreshData = async () => {
     if (!currentUser) return
@@ -304,10 +328,13 @@ function ClassManagementPanel({ currentUser }) {
       setErrorMessage('Unable to load class data right now. Please try again.')
     } finally {
       setLoading(false)
+      // Keep docs in sync for any currently-open panels.
+      await refreshAllOpenDocuments()
     }
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser])
@@ -315,12 +342,14 @@ function ClassManagementPanel({ currentUser }) {
   useEffect(() => {
     if (!selectedClassId) return
     if (!classes.some((c) => c.id === selectedClassId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedClassId(null)
     }
   }, [classes, selectedClassId])
 
   useEffect(() => {
     if (!selectedClassId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setClassDetailTab('roster')
     }
   }, [selectedClassId])
@@ -539,7 +568,7 @@ function ClassManagementPanel({ currentUser }) {
         const localGroups = readLocal(localGroupsKey, [])
         const idx = localGroups.findIndex((row) => row.id === groupItem.id)
         if (idx >= 0) {
-          localGroups[idx] = { ...localGroups[idx], members: nextMembers, updatedAt: Date.now() }
+          localGroups[idx] = { ...localGroups[idx], members: nextMembers, updatedAt: null }
         } else {
           localGroups.unshift({
             id: groupItem.id,
@@ -548,7 +577,7 @@ function ClassManagementPanel({ currentUser }) {
             teacherUid: currentUser.uid,
             name: groupItem.name,
             members: nextMembers,
-            updatedAt: Date.now(),
+            updatedAt: null,
           })
         }
         writeLocal(localGroupsKey, localGroups)
@@ -626,7 +655,7 @@ function ClassManagementPanel({ currentUser }) {
           moduleName: moduleItem.name || null,
           teacherUid: currentUser.uid,
           groupIds: nextGroupIds,
-          updatedAt: Date.now(),
+          updatedAt: null,
         }
         if (idx >= 0) localGroupAccess[idx] = { ...localGroupAccess[idx], ...payload }
         else localGroupAccess.unshift(payload)
@@ -711,7 +740,7 @@ function ClassManagementPanel({ currentUser }) {
           studentEmail,
           isUnlocked: nextUnlocked,
           source: 'manual',
-          updatedAt: Date.now(),
+          updatedAt: null,
         }
         if (idx >= 0) localAccess[idx] = { ...localAccess[idx], ...payload }
         else localAccess.unshift(payload)
@@ -1076,11 +1105,33 @@ function ClassManagementPanel({ currentUser }) {
                                     <Badge tone="neutral">Module</Badge>
                                   </div>
 
-                                  <div className="mt-2.5 flex items-center gap-2">
+                                  <div className="mt-2.5 flex items-center justify-between gap-2">
                                     <Badge tone="neutral">
                                       {allowedEmails.size} unlocked
                                     </Badge>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={async () => {
+                                        const next = !openDocumentsByModule[moduleItem.id]
+                                        setOpenDocumentsByModule((prev) => ({ ...prev, [moduleItem.id]: next }))
+                                        if (next) await fetchDocumentsForModule(moduleItem.id)
+                                      }}
+                                    >
+                                      {openDocumentsByModule[moduleItem.id] ? 'Hide documents' : 'Documents'}
+                                    </Button>
                                   </div>
+
+                                  {openDocumentsByModule[moduleItem.id] && (
+                                    <div className="mt-3 rounded-lg border border-[rgba(65,90,119,0.16)] bg-white/80">
+                                      <DocumentPanel
+                                        moduleId={moduleItem.id}
+                                        documents={documentsByModule[moduleItem.id] || []}
+                                        onDocumentsChanged={() => fetchDocumentsForModule(moduleItem.id)}
+                                      />
+                                    </div>
+                                  )}
 
                                   <div className="mt-2.5">
                                     <p className="text-[0.72rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)] mb-1.5">
@@ -1170,6 +1221,7 @@ function ClassManagementPanel({ currentUser }) {
 
 export default function TeacherDashboard({ onLogout, currentUser }) {
   const [activeTab, setActiveTab] = useState('overview')
+  const [classesWarmupKey, setClassesWarmupKey] = useState(0)
   const [overviewStats, setOverviewStats] = useState({
     activeStudents: '--',
     modules: '--',
@@ -1177,6 +1229,10 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
     insights: '0',
   })
   const firstName = currentUser?.displayName?.split(' ')[0] || null
+
+  const classesPanel = useMemo(() => (
+    <ClassManagementPanel key={classesWarmupKey} currentUser={currentUser} />
+  ), [classesWarmupKey, currentUser])
 
   useEffect(() => {
     const loadOverviewStats = async () => {
@@ -1305,7 +1361,7 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
                 <AnalyticsDashboard />
               </Panel>
             ) : activeTab === 'classes' ? (
-              <ClassManagementPanel currentUser={currentUser} />
+              classesPanel
             ) : (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -1338,6 +1394,13 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
                     icon={<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><line x1="9" y1="15" x2="15" y2="15" /></>}
                     tag="Upload"
                     tagTone="warning"
+                    cta="Open class management"
+                    onClick={() => {
+                      // Route teachers to the module list, where per-module document upload lives.
+                      setActiveTab('classes')
+                      // Force remount to ensure fresh data load when navigating from Overview.
+                      setClassesWarmupKey((v) => v + 1)
+                    }}
                   />
                 <DashboardCard
                   title="Manage Classes"

@@ -25,3 +25,4 @@ SCORED-results_llama-3_1-8b-instruct_2026-02-08.xlsx
 frontend/.playwright/
 frontend/test-results/
 test-results/
+.cursor/*
