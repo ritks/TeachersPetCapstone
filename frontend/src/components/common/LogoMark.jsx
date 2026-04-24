@@ -5,6 +5,7 @@ function cx(...parts) {
 }
 
 export default function LogoMark({
+  src,
   alt = "Teacher's Pet logo",
   containerClassName = '',
   imgClassName = '',
@@ -17,7 +18,7 @@ export default function LogoMark({
       )}
     >
       <img
-        src={logoSrc}
+        src={src ?? logoSrc}
         alt={alt}
         className={cx('w-full h-full object-contain', imgClassName)}
       />

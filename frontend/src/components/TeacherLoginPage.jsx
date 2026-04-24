@@ -49,7 +49,7 @@ export default function TeacherLoginPage({ onSuccess, embedded = false }) {
   }
 
   const content = (
-    <div className="w-full max-w-sm">
+    <div className={embedded ? 'w-full max-w-none' : 'w-full max-w-sm'}>
       {!embedded && (
         <div className="text-center mb-8">
           <LogoMark containerClassName="w-14 h-14 rounded-2xl border border-[var(--color-brand-100)] mx-auto mb-3 p-1" />
