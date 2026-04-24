@@ -35,9 +35,13 @@ except Exception:
 _allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
 allowed_origins = [o.strip() for o in _allowed_origins_env.split(",") if o.strip()]
 
+# Allow any Vercel preview deployment for this project (branch/PR previews)
+_vercel_preview_regex = r"https://teachers-pet-capstone(-[a-z0-9-]+)?\.vercel\.app"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=_vercel_preview_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

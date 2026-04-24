@@ -11,6 +11,7 @@ import StudentDashboard from './components/student/StudentDashboard'
 import PdfViewerPanel from './components/student/PdfViewerPanel'
 import TeacherDashboard from './components/teacher/TeacherDashboard'
 import { Button } from './components/ui/primitives'
+import { apiUrl } from './lib/api'
 
 function loadStudentSessions(courseCode) {
   try {
@@ -118,12 +119,36 @@ function TeacherApp({ currentUser, onLogout }) {
 
 function StudentModuleView({ onLogout }) {
   const { moduleId } = useParams()
-  const { getModule } = useStudent()
+  const { getModule, registerModule } = useStudent()
   const navigate = useNavigate()
-  const moduleData = getModule(moduleId)
+  const [loading, setLoading] = useState(false)
+  let moduleData = getModule(moduleId)
+
+  // Allow direct URL access by fetching module info from the backend
+  if (!moduleData && !loading) {
+    setLoading(true)
+    fetch(apiUrl(`/modules/${moduleId}`))
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) {
+          const fallback = {
+            classId: 'direct-access',
+            moduleId: data.id,
+            moduleName: data.name,
+            moduleDescription: data.description || null,
+            teacherName: null,
+            courseCode: 'DIRECT',
+          }
+          registerModule(data.id, fallback)
+        }
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }
+
+  if (loading) return <LoadingSpinner />
 
   if (!moduleData) {
-    // Module not in registry (e.g. direct URL visit without going through dashboard)
     return <Navigate to="/student" replace />
   }
 
