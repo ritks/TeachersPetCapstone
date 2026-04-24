@@ -50,14 +50,16 @@ class Retriever:
         module_name: Optional[str] = None,
         module_description: Optional[str] = None,
         top_k: Optional[int] = None,
-    ) -> str:
+    ) -> tuple[str, list[dict]]:
+        """Build RAG context and return (prompt_string, citations_list)."""
         chunks = self.retrieve(query, module_id=module_id, top_k=top_k)
 
         if not chunks:
             if module_name:
-                return self._module_scope_prompt(module_name, module_description, "")
-            return ""
+                return self._module_scope_prompt(module_name, module_description, ""), []
+            return "", []
 
+        citations: list[dict] = []
         parts: list[str] = []
         for i, chunk in enumerate(chunks, 1):
             meta = chunk["metadata"]
@@ -69,10 +71,20 @@ class Retriever:
                 source += ")"
             parts.append(f"[Reference {i}{source}]\n{chunk['content']}")
 
+            citations.append({
+                "ref": i,
+                "document_id": meta.get("document_id", ""),
+                "chapter": meta.get("chapter", ""),
+                "section": meta.get("section", ""),
+                "page_start": meta.get("page_start", 0),
+                "page_end": meta.get("page_end", 0),
+                "snippet": chunk["content"][:200],
+            })
+
         references = "\n\n".join(parts)
 
         if module_name:
-            return self._module_scope_prompt(module_name, module_description, references)
+            return self._module_scope_prompt(module_name, module_description, references), citations
 
         return (
             "Use the following textbook reference material to inform your responses:\n"
@@ -80,7 +92,7 @@ class Retriever:
             f"{references}\n"
             "---\n"
             "Reference the textbook material when relevant, but explain concepts in your own words."
-        )
+        ), citations
 
     @staticmethod
     def _module_scope_prompt(

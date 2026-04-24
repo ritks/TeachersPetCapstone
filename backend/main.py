@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from google import genai
 import os
 import json
@@ -34,9 +35,13 @@ except Exception:
 _allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
 allowed_origins = [o.strip() for o in _allowed_origins_env.split(",") if o.strip()]
 
+# Allow any Vercel preview deployment for this project (branch/PR previews)
+_vercel_preview_regex = r"https://teachers-pet-capstone(-[a-z0-9-]+)?\.vercel\.app"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=_vercel_preview_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -192,6 +197,17 @@ class ConversationRequest(BaseModel):
     module_id: Optional[str] = None  # scope chat to a module via RAG
 
 
+class CitationItem(BaseModel):
+    ref: int
+    document_id: str = ""
+    chapter: str = ""
+    section: str = ""
+    page_start: int = 0
+    page_end: int = 0
+    snippet: str = ""
+    original_filename: str = ""
+
+
 class ConversationResponse(BaseModel):
     answer: str
     session_id: str
@@ -199,6 +215,7 @@ class ConversationResponse(BaseModel):
     validation: Optional[dict] = None  # Validation metadata from GitHub models
     flag_category: Optional[str] = None  # unsafe_content | validation_failure | system_error | none
     flag_severity: Optional[str] = None  # low | medium | high
+    citations: list[CitationItem] = []
 
 
 class ModuleCreate(BaseModel):
@@ -299,13 +316,14 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
 
         # ---- build system prompt (base + optional RAG context) --------
         system_prompt = BASE_SYSTEM_PROMPT
+        citations_raw: list[dict] = []
 
         if data.module_id:
             module = db.query(Module).filter(Module.id == data.module_id).first()
             if not module:
                 raise HTTPException(status_code=404, detail="Module not found")
 
-            rag_context = retriever.build_context(
+            rag_context, citations_raw = retriever.build_context(
                 query=question,
                 module_id=module.id,
                 module_name=module.name,
@@ -313,6 +331,26 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
             )
             if rag_context:
                 system_prompt = f"{system_prompt}\n\n{rag_context}"
+
+        # Enrich citations with original filenames
+        citation_items: list[CitationItem] = []
+        if citations_raw:
+            doc_ids = list({c["document_id"] for c in citations_raw if c.get("document_id")})
+            doc_name_map: dict[str, str] = {}
+            if doc_ids:
+                docs = db.query(Document).filter(Document.id.in_(doc_ids)).all()
+                doc_name_map = {d.id: d.original_filename for d in docs}
+            for c in citations_raw:
+                citation_items.append(CitationItem(
+                    ref=c["ref"],
+                    document_id=c.get("document_id", ""),
+                    chapter=c.get("chapter", ""),
+                    section=c.get("section", ""),
+                    page_start=c.get("page_start", 0),
+                    page_end=c.get("page_end", 0),
+                    snippet=c.get("snippet", ""),
+                    original_filename=doc_name_map.get(c.get("document_id", ""), ""),
+                ))
 
         # ---- conversation history for Gemini --------------------------
         contents = []
@@ -350,6 +388,7 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
                     error=False,
                     flag_category="unsafe_content",
                     flag_severity="high",
+                    citations=citation_items,
                 )
         except Exception as e:
             # Log validation error but don't block response
@@ -376,6 +415,7 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
             validation=validation_result,
             flag_category=flag_category,
             flag_severity=flag_severity,
+            citations=citation_items,
         )
 
     except HTTPException:
@@ -700,6 +740,36 @@ async def delete_document(
     db.delete(doc)
     db.commit()
     return {"message": "Document deleted"}
+
+
+@app.get("/modules/{module_id}/documents/{document_id}/file")
+async def serve_document_file(
+    module_id: str,
+    document_id: str,
+    db_session: Session = Depends(get_db),
+):
+    """Serve the original uploaded file (PDF) for the frontend viewer."""
+    doc = (
+        db_session.query(Document)
+        .filter(Document.id == document_id, Document.module_id == module_id)
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    from rag.document_processor import UPLOAD_DIR
+
+    file_path = os.path.join(UPLOAD_DIR, doc.filename)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    media_type = "application/pdf" if doc.original_filename.lower().endswith(".pdf") else "application/octet-stream"
+    return FileResponse(
+        file_path,
+        media_type=media_type,
+        filename=doc.original_filename,
+        headers={"Access-Control-Expose-Headers": "Content-Disposition"},
+    )
 
 
 # =====================================================================
