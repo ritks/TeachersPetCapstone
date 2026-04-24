@@ -108,9 +108,19 @@ export default function App() {
           </StudentRoute>
         }
       />
+      <Route
+        path="/demo"
+        element={<DemoChat onLogout={handleLogout} />}
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
+}
+
+const DEMO_STUDENT_DATA = { courseCode: 'demo', moduleId: null, moduleName: 'Chat', teacherUid: null, teacherName: null }
+
+function DemoChat({ onLogout }) {
+  return <StudentApp studentData={DEMO_STUDENT_DATA} onLogout={onLogout} />
 }
 
 function TeacherApp({ currentUser, onLogout }) {
