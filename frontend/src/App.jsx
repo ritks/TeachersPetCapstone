@@ -8,6 +8,7 @@ import ChatPanel, { WELCOME_MESSAGE } from './components/chat/ChatPanel'
 import LoadingSpinner from './components/common/LoadingSpinner'
 import StudentSidebar from './components/student/StudentSidebar'
 import StudentDashboard from './components/student/StudentDashboard'
+import PdfViewerPanel from './components/student/PdfViewerPanel'
 import TeacherDashboard from './components/teacher/TeacherDashboard'
 import { Button } from './components/ui/primitives'
 
@@ -147,6 +148,8 @@ function StudentApp({ studentData, onLogout, onBack = null }) {
   const [activeSessionId, setActiveSessionId] = useState(
     () => loadStudentSessions(storageKey)[0]?.id ?? ''
   )
+  const [activeCitations, setActiveCitations] = useState([])
+  const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
   const teacherName = studentData.teacherName ?? null
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null
@@ -157,6 +160,8 @@ function StudentApp({ studentData, onLogout, onBack = null }) {
     setSessions(updated)
     saveStudentSessions(storageKey, updated)
     setActiveSessionId(session.id)
+    setActiveCitations([])
+    setPdfViewerOpen(false)
   }
 
   const handleSessionUpdate = (msgs, backendSid) => {
@@ -198,6 +203,16 @@ function StudentApp({ studentData, onLogout, onBack = null }) {
       saveStudentSessions(storageKey, updated)
       return updated
     })
+    if (sessionId === activeSessionId) {
+      setActiveCitations([])
+      setPdfViewerOpen(false)
+    }
+  }
+
+  const handleCitationsChange = (citations) => {
+    setActiveCitations(citations)
+    const hasPdf = citations.some((c) => c.original_filename?.toLowerCase().endsWith('.pdf'))
+    if (hasPdf) setPdfViewerOpen(true)
   }
 
   return (
@@ -205,7 +220,11 @@ function StudentApp({ studentData, onLogout, onBack = null }) {
       <StudentSidebar
         sessions={sessions}
         activeSessionId={activeSessionId}
-        onSelectSession={setActiveSessionId}
+        onSelectSession={(id) => {
+          setActiveSessionId(id)
+          setActiveCitations([])
+          setPdfViewerOpen(false)
+        }}
         onNewSession={handleNewSession}
         onRenameSession={handleRenameSession}
         onDeleteSession={handleDeleteSession}
@@ -230,16 +249,30 @@ function StudentApp({ studentData, onLogout, onBack = null }) {
             {APP_COPY.leave}
           </Button>
         </div>
-        {activeSession && (
-          <ChatPanel
-            selectedModuleId={studentData.moduleId}
-            userType="student"
-            studentData={studentData}
-            sessionKey={activeSessionId}
-            initialMessages={activeSession.messages}
-            onMessagesUpdate={handleSessionUpdate}
-          />
-        )}
+        <div className="flex flex-1 min-h-0">
+          <div className="flex flex-col flex-1 min-w-0">
+            {activeSession && (
+              <ChatPanel
+                selectedModuleId={studentData.moduleId}
+                userType="student"
+                studentData={studentData}
+                sessionKey={activeSessionId}
+                initialMessages={activeSession.messages}
+                onMessagesUpdate={handleSessionUpdate}
+                onCitationsChange={handleCitationsChange}
+              />
+            )}
+          </div>
+          {pdfViewerOpen && (
+            <div className="w-[45%] flex-shrink-0 min-w-[320px] max-w-[600px]">
+              <PdfViewerPanel
+                citations={activeCitations}
+                moduleId={studentData.moduleId}
+                onClose={() => setPdfViewerOpen(false)}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

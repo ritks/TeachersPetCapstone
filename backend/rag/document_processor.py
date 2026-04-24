@@ -31,11 +31,39 @@ class DocumentProcessor:
 
         doc = fitz.open(file_path)
         full_text = ""
+        page_boundaries: list[tuple[int, int]] = []  # (page_number_1indexed, start_offset)
         for page in doc:
+            page_boundaries.append((page.number + 1, len(full_text)))
             full_text += page.get_text() + "\n\n"
+        total_pages = len(page_boundaries)
         doc.close()
 
-        return self._process_text(full_text, module_id, document_id)
+        chunks = self.chunker.chunk_text(full_text)
+        if not chunks:
+            return 0
+
+        # Map each chunk back to its page range
+        def _find_page(char_pos: int) -> int:
+            for i in range(len(page_boundaries) - 1, -1, -1):
+                if char_pos >= page_boundaries[i][1]:
+                    return page_boundaries[i][0]
+            return 1
+
+        search_pos = 0
+        for chunk in chunks:
+            anchor = chunk.content[:100].strip()
+            idx = full_text.find(anchor, search_pos)
+            if idx == -1:
+                idx = full_text.find(anchor)
+            if idx != -1:
+                chunk.metadata["page_start"] = _find_page(idx)
+                chunk.metadata["page_end"] = _find_page(idx + len(chunk.content))
+                search_pos = idx
+            else:
+                chunk.metadata["page_start"] = 1
+                chunk.metadata["page_end"] = total_pages
+
+        return self._process_chunks(chunks, full_text, module_id, document_id)
 
     def process_text(self, text: str, module_id: str, document_id: str) -> int:
         """Chunk raw text, embed it, and store in the vector DB.
@@ -65,7 +93,15 @@ class DocumentProcessor:
         chunks = self.chunker.chunk_text(text)
         if not chunks:
             return 0
+        return self._process_chunks(chunks, text, module_id, document_id)
 
+    def _process_chunks(
+        self,
+        chunks: list,
+        full_text: str,
+        module_id: str,
+        document_id: str,
+    ) -> int:
         texts = [c.content for c in chunks]
         embeddings = self.embedding_service.embed_batch(texts)
 
@@ -77,6 +113,8 @@ class DocumentProcessor:
                 "chunk_index": c.chunk_index,
                 "chapter": c.chapter or "",
                 "section": c.section or "",
+                "page_start": c.metadata.get("page_start", 0),
+                "page_end": c.metadata.get("page_end", 0),
             }
             for c in chunks
         ]

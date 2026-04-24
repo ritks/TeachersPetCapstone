@@ -228,7 +228,62 @@ function TypingIndicator() {
   )
 }
 
-export function Bubble({ message }) {
+function CitationCards({ citations, onCitationClick }) {
+  if (!citations || citations.length === 0) return null
+
+  // Deduplicate by document_id + page_start
+  const seen = new Set()
+  const unique = citations.filter((c) => {
+    if (!c.document_id) return false
+    const key = `${c.document_id}:${c.page_start}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  if (unique.length === 0) return null
+
+  return (
+    <div className="mt-2 flex flex-col gap-1.5">
+      <p className="text-[0.65rem] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
+        Sources
+      </p>
+      {unique.map((c, i) => (
+        <button
+          key={`${c.document_id}-${c.page_start}-${i}`}
+          type="button"
+          onClick={() => onCitationClick?.(c)}
+          className="group flex items-start gap-2 rounded-lg border border-[rgba(65,90,119,0.18)] bg-white/70 hover:bg-white hover:border-[var(--color-brand-300)] px-3 py-2 text-left transition-all cursor-pointer"
+        >
+          <span className="flex-shrink-0 w-5 h-5 rounded bg-amber-100 text-amber-700 text-[0.65rem] font-bold flex items-center justify-center mt-0.5">
+            {c.ref}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-[var(--color-text-primary)] truncate">
+              {c.original_filename || 'Document'}
+            </p>
+            <p className="text-[0.65rem] text-[var(--color-text-muted)]">
+              {c.page_start > 0 && (c.page_start === c.page_end ? `Page ${c.page_start}` : `Pages ${c.page_start}–${c.page_end}`)}
+              {c.chapter && ` · ${c.chapter}`}
+              {c.section && ` · ${c.section}`}
+            </p>
+            {c.snippet && (
+              <p className="text-[0.65rem] text-[var(--color-text-secondary)] mt-0.5 line-clamp-2 italic">
+                "{c.snippet.slice(0, 120)}{c.snippet.length > 120 ? '…' : ''}"
+              </p>
+            )}
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 flex-shrink-0 text-[var(--color-text-muted)] group-hover:text-[var(--color-brand-600)] mt-1 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export function Bubble({ message, onCitationClick }) {
   const isStudent = message.role === 'student'
   const canSpeak = !isStudent && !message.isError
   const [ttsSupported] = useState(() => !!getSpeechSynthesis())
@@ -316,6 +371,9 @@ export function Bubble({ message }) {
             {message.content}
           </ReactMarkdown>
         )}
+        {!isStudent && message.citations && message.citations.length > 0 && (
+          <CitationCards citations={message.citations} onCitationClick={onCitationClick} />
+        )}
       </div>
 
       {canSpeak && ttsSupported && (
@@ -347,7 +405,7 @@ export function Bubble({ message }) {
   )
 }
 
-export default function ChatPanel({ selectedModuleId, userType, studentData, sessionKey, initialMessages, onMessagesUpdate }) {
+export default function ChatPanel({ selectedModuleId, userType, studentData, sessionKey, initialMessages, onMessagesUpdate, onCitationsChange }) {
   const [messages, setMessages] = useState(initialMessages ?? [WELCOME_MESSAGE])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -403,9 +461,11 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, ses
         throw new Error(data?.detail || 'Chat request failed')
       }
       setSessionId(data.session_id)
-      const finalMessages = [...withQuestion, { role: 'tutor', content: data.answer, isError: data.error }]
+      const citations = data.citations || []
+      const finalMessages = [...withQuestion, { role: 'tutor', content: data.answer, isError: data.error, citations }]
       setMessages(finalMessages)
       if (onMessagesUpdate) onMessagesUpdate(finalMessages, data.session_id)
+      if (onCitationsChange && citations.length > 0) onCitationsChange(citations)
 
       if (userType === 'student' && studentData) {
         addDoc(collection(db, 'prompts'), {
@@ -470,7 +530,7 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, ses
         ) : (
           <div className="max-w-3xl mx-auto flex flex-col gap-4">
             {messages.map((msg, i) => (
-              <Bubble key={i} message={msg} />
+              <Bubble key={i} message={msg} onCitationClick={(c) => onCitationsChange?.([c])} />
             ))}
             {loading && <TypingIndicator />}
             <div ref={scrollRef} />
