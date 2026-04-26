@@ -405,33 +405,30 @@ export function Bubble({ message, onCitationClick }) {
   )
 }
 
-export default function ChatPanel({ selectedModuleId, userType, studentData, sessionKey, initialMessages, onMessagesUpdate, onCitationsChange }) {
+export default function ChatPanel({ selectedModuleId, userType, studentData, currentUser, sessionKey, initialMessages, initialBackendSessionId = null, onMessagesUpdate, onCitationsChange }) {
   const [messages, setMessages] = useState(initialMessages ?? [WELCOME_MESSAGE])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [sessionId, setSessionId] = useState(null)
+  const [sessionId, setSessionId] = useState(initialBackendSessionId)
   const [greeting] = useState(
     () => CHAT_COPY.greetings[Math.floor(Math.random() * CHAT_COPY.greetings.length)]
   )
   const scrollRef = useRef(null)
 
-  const initialMessagesRef = useRef(initialMessages)
-  useEffect(() => { initialMessagesRef.current = initialMessages }, [initialMessages])
-
   useEffect(() => {
     if (sessionKey !== undefined) {
-      setMessages(initialMessagesRef.current ?? [WELCOME_MESSAGE])
-      setSessionId(null)
+      setMessages(initialMessages ?? [WELCOME_MESSAGE])
+      setSessionId(initialBackendSessionId ?? null)
       setInput('')
     }
-  }, [sessionKey])
+  }, [sessionKey, initialMessages, initialBackendSessionId])
 
   useEffect(() => {
     if (sessionKey === undefined) {
       setMessages([WELCOME_MESSAGE])
-      setSessionId(null)
+      setSessionId(initialBackendSessionId ?? null)
     }
-  }, [selectedModuleId, sessionKey])
+  }, [selectedModuleId, sessionKey, initialBackendSessionId])
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -451,9 +448,15 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, ses
       const body = { question, session_id: sessionId }
       if (selectedModuleId) body.module_id = selectedModuleId
 
+      const headers = { 'Content-Type': 'application/json' }
+      if (currentUser) {
+        const idToken = await currentUser.getIdToken()
+        headers.Authorization = `Bearer ${idToken}`
+      }
+
       const res = await fetch(apiUrl('/chat'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body),
       })
       const data = await res.json()

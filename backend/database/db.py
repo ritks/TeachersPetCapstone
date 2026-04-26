@@ -5,9 +5,16 @@ import os
 DATABASE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 os.makedirs(DATABASE_DIR, exist_ok=True)
 
-DATABASE_URL = f"sqlite:///{os.path.join(DATABASE_DIR, 'teachers_pet.db')}"
+DEFAULT_SQLITE_URL = f"sqlite:///{os.path.join(DATABASE_DIR, 'teachers_pet.db')}"
+DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_SQLITE_URL)
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine_kwargs = {}
+if DATABASE_URL.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
