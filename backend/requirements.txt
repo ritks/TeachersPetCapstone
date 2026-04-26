@@ -11,6 +11,8 @@ requests
 openpyxl
 httpx
 redis
+firebase-admin
+psycopg2-binary
 
 # Testing
 pytest

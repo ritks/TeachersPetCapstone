@@ -44,3 +44,33 @@ class Document(Base):
     created_at = Column(DateTime, default=_utcnow)
 
     module = relationship("Module", back_populates="documents")
+
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    id = Column(String, primary_key=True, default=_generate_uuid)
+    student_uid = Column(String, nullable=False, index=True)
+    module_id = Column(String, nullable=True, index=True)
+    title = Column(String(255), nullable=False, default="New Chat")
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    messages = relationship(
+        "ChatMessage",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="ChatMessage.created_at",
+    )
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(String, primary_key=True, default=_generate_uuid)
+    session_id = Column(String, ForeignKey("chat_sessions.id"), nullable=False, index=True)
+    role = Column(String(32), nullable=False)  # user | assistant
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, index=True)
+
+    session = relationship("ChatSession", back_populates="messages")

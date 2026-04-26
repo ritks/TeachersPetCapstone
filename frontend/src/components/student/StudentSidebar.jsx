@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { Button, Input } from '../ui/primitives'
 
-export default function StudentSidebar({ sessions, activeSessionId, onSelectSession, onNewSession, onRenameSession, onDeleteSession, moduleName, teacherName }) {
+export default function StudentSidebar({ sessions, activeSessionId, onSelectSession, onNewSession, onRenameSession, onDeleteSession, onClearAllHistory = null, moduleName, teacherName }) {
   const [editingId, setEditingId] = useState(null)
   const [editValue, setEditValue] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
@@ -38,6 +38,16 @@ export default function StudentSidebar({ sessions, activeSessionId, onSelectSess
           </svg>
           New Session
         </Button>
+        {onClearAllHistory && (
+          <Button
+            onClick={onClearAllHistory}
+            variant="danger"
+            size="md"
+            className="w-full mt-2"
+          >
+            Clear All History
+          </Button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-3.5 py-3">

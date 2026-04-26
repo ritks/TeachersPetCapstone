@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from google import genai
@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from database.db import get_db, init_db
-from database.models import Module, Document
+from database.models import Module, Document, ChatSession, ChatMessage
 from rag.embeddings import EmbeddingService
 from rag.vector_store import VectorStore
 from rag.retriever import Retriever
@@ -30,6 +30,15 @@ try:
     import redis as redis_lib
 except Exception:
     redis_lib = None
+
+try:
+    import firebase_admin
+    from firebase_admin import auth as firebase_auth
+    from firebase_admin import credentials as firebase_credentials
+except Exception:
+    firebase_admin = None
+    firebase_auth = None
+    firebase_credentials = None
 
 # ── CORS ──────────────────────────────────────────────────────────────
 _allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
@@ -90,99 +99,116 @@ SAFETY_SETTINGS = [
     types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_LOW_AND_ABOVE"),
 ]
 
-# ── Session store (Redis + TTL, with memory fallback) ───────────────
-CHAT_SESSION_TTL_SECONDS = int(os.getenv("CHAT_SESSION_TTL_SECONDS", "86400"))
+PRIMARY_CHAT_MODEL = os.getenv("PRIMARY_CHAT_MODEL", "gemini-3.1-flash-lite-preview")
+FALLBACK_CHAT_MODEL = os.getenv("FALLBACK_CHAT_MODEL", "gemini-2.5-flash-lite")
+CHAT_MODEL_RETRY_ATTEMPTS = int(os.getenv("CHAT_MODEL_RETRY_ATTEMPTS", "2"))
+CHAT_MODEL_RETRY_DELAY_SECONDS = float(os.getenv("CHAT_MODEL_RETRY_DELAY_SECONDS", "0.75"))
+
+# ── Session cache (Redis for active sessions, memory fallback) ───────
+CHAT_CACHE_TTL_SECONDS = int(os.getenv("CHAT_CACHE_TTL_SECONDS", "86400"))
 REDIS_URL = os.getenv("REDIS_URL")
 
 
-class MemorySessionStore:
-    def __init__(self, ttl_seconds: int):
-        self.ttl_seconds = ttl_seconds
-        self._sessions: dict[str, dict] = {}
+class MemorySessionCache:
+    def __init__(self):
+        self._sessions: dict[str, list[dict]] = {}
 
-    def _purge_expired(self):
-        now = time.time()
-        expired = [
-            sid for sid, row in self._sessions.items()
-            if row.get("expires_at", 0) <= now
-        ]
-        for sid in expired:
-            del self._sessions[sid]
+    def _key(self, student_uid: str, session_id: str) -> str:
+        return f"{student_uid}:{session_id}"
 
-    def get_history(self, session_id: str) -> Optional[list[dict]]:
-        self._purge_expired()
-        row = self._sessions.get(session_id)
-        if not row:
-            return None
-        return row.get("history", [])
+    def get_history(self, student_uid: str, session_id: str) -> Optional[list[dict]]:
+        history = self._sessions.get(self._key(student_uid, session_id))
+        return list(history) if history else None
 
-    def append_messages(self, session_id: str, messages: list[dict]) -> list[dict]:
-        self._purge_expired()
-        row = self._sessions.get(session_id) or {"history": []}
-        history = row.get("history", [])
-        history.extend(messages)
-        self._sessions[session_id] = {
-            "history": history,
-            "expires_at": time.time() + self.ttl_seconds,
-        }
+    def set_history(self, student_uid: str, session_id: str, history: list[dict]) -> list[dict]:
+        self._sessions[self._key(student_uid, session_id)] = list(history)
         return history
 
-    def delete(self, session_id: str) -> bool:
-        self._purge_expired()
-        if session_id in self._sessions:
-            del self._sessions[session_id]
+    def append_messages(self, student_uid: str, session_id: str, messages: list[dict]) -> list[dict]:
+        key = self._key(student_uid, session_id)
+        history = list(self._sessions.get(key) or [])
+        history.extend(messages)
+        self._sessions[key] = history
+        return history
+
+    def delete(self, student_uid: str, session_id: str) -> bool:
+        key = self._key(student_uid, session_id)
+        if key in self._sessions:
+            del self._sessions[key]
             return True
         return False
 
+    def delete_user_sessions(self, student_uid: str) -> None:
+        prefix = f"{student_uid}:"
+        keys = [key for key in self._sessions if key.startswith(prefix)]
+        for key in keys:
+            del self._sessions[key]
 
-class RedisSessionStore:
+
+class RedisSessionCache:
     KEY_PREFIX = "tp:chat:"
 
     def __init__(self, redis_url: str, ttl_seconds: int):
         self.ttl_seconds = ttl_seconds
         self.client = redis_lib.Redis.from_url(redis_url, decode_responses=True)
-        # validate connection at startup
         self.client.ping()
 
-    def _key(self, session_id: str) -> str:
-        return f"{self.KEY_PREFIX}{session_id}"
+    def _key(self, student_uid: str, session_id: str) -> str:
+        return f"{self.KEY_PREFIX}{student_uid}:{session_id}"
 
-    def get_history(self, session_id: str) -> Optional[list[dict]]:
-        raw = self.client.get(self._key(session_id))
+    def _pattern(self, student_uid: str) -> str:
+        return f"{self.KEY_PREFIX}{student_uid}:*"
+
+    def get_history(self, student_uid: str, session_id: str) -> Optional[list[dict]]:
+        key = self._key(student_uid, session_id)
+        raw = self.client.get(key)
         if not raw:
             return None
-        history = json.loads(raw)
-        # sliding expiration
-        self.client.expire(self._key(session_id), self.ttl_seconds)
+        self.client.expire(key, self.ttl_seconds)
+        return json.loads(raw)
+
+    def set_history(self, student_uid: str, session_id: str, history: list[dict]) -> list[dict]:
+        key = self._key(student_uid, session_id)
+        self.client.setex(key, self.ttl_seconds, json.dumps(history))
         return history
 
-    def append_messages(self, session_id: str, messages: list[dict]) -> list[dict]:
-        key = self._key(session_id)
+    def append_messages(self, student_uid: str, session_id: str, messages: list[dict]) -> list[dict]:
+        key = self._key(student_uid, session_id)
         raw = self.client.get(key)
         history = json.loads(raw) if raw else []
         history.extend(messages)
         self.client.setex(key, self.ttl_seconds, json.dumps(history))
         return history
 
-    def delete(self, session_id: str) -> bool:
-        return self.client.delete(self._key(session_id)) > 0
+    def delete(self, student_uid: str, session_id: str) -> bool:
+        return self.client.delete(self._key(student_uid, session_id)) > 0
+
+    def delete_user_sessions(self, student_uid: str) -> None:
+        cursor = 0
+        pattern = self._pattern(student_uid)
+        while True:
+            cursor, keys = self.client.scan(cursor=cursor, match=pattern, count=200)
+            if keys:
+                self.client.delete(*keys)
+            if cursor == 0:
+                break
 
 
-def _build_session_store():
+def _build_session_cache():
     if REDIS_URL and redis_lib:
         try:
-            print(f"[INFO] Using Redis chat sessions with TTL={CHAT_SESSION_TTL_SECONDS}s")
-            return RedisSessionStore(REDIS_URL, CHAT_SESSION_TTL_SECONDS)
+            print(f"[INFO] Using Redis chat cache with TTL={CHAT_CACHE_TTL_SECONDS}s")
+            return RedisSessionCache(REDIS_URL, CHAT_CACHE_TTL_SECONDS)
         except Exception as e:
-            print(f"[WARN] Redis unavailable, falling back to memory sessions: {e}")
+            print(f"[WARN] Redis unavailable, falling back to memory cache: {e}")
     elif REDIS_URL and not redis_lib:
-        print("[WARN] REDIS_URL set but redis package is missing. Falling back to memory sessions.")
+        print("[WARN] REDIS_URL set but redis package is missing. Falling back to memory cache.")
 
-    print(f"[INFO] Using in-memory chat sessions with TTL={CHAT_SESSION_TTL_SECONDS}s")
-    return MemorySessionStore(CHAT_SESSION_TTL_SECONDS)
+    print("[INFO] Using in-memory chat cache")
+    return MemorySessionCache()
 
 
-session_store = _build_session_store()
+session_cache = _build_session_cache()
 
 
 # ── Pydantic schemas ─────────────────────────────────────────────────
@@ -216,6 +242,28 @@ class ConversationResponse(BaseModel):
     flag_category: Optional[str] = None  # unsafe_content | validation_failure | system_error | none
     flag_severity: Optional[str] = None  # low | medium | high
     citations: list[CitationItem] = []
+
+
+class SessionSummaryResponse(BaseModel):
+    session_id: str
+    title: str
+    module_id: Optional[str] = None
+    created_at: str
+    updated_at: str
+    message_count: int
+
+
+class SessionDetailResponse(BaseModel):
+    session_id: str
+    title: str
+    module_id: Optional[str] = None
+    created_at: str
+    updated_at: str
+    history: list[dict]
+
+
+class RenameSessionRequest(BaseModel):
+    title: str
 
 
 class ModuleCreate(BaseModel):
@@ -289,18 +337,178 @@ class AnalyticsSummaryResponse(BaseModel):
     sampled_rows: int
 
 
+def _init_firebase_admin():
+    if not firebase_admin:
+        print("[WARN] firebase-admin package not installed; authenticated chat/session endpoints disabled")
+        return
+    if firebase_admin._apps:
+        return
+
+    service_account_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+    if service_account_json:
+        try:
+            parsed = json.loads(service_account_json)
+            cred = firebase_credentials.Certificate(parsed)
+            firebase_admin.initialize_app(cred)
+            print("[INFO] Firebase Admin initialized from FIREBASE_SERVICE_ACCOUNT_JSON")
+            return
+        except Exception as e:
+            print(f"[WARN] Failed to initialize Firebase Admin from FIREBASE_SERVICE_ACCOUNT_JSON: {e}")
+
+    cred = firebase_credentials.ApplicationDefault()
+    firebase_admin.initialize_app(cred)
+    print("[INFO] Firebase Admin initialized with application default credentials")
+
+
+def _bearer_token_from_header(authorization: Optional[str]) -> Optional[str]:
+    if not authorization:
+        return None
+    parts = authorization.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+    token = parts[1].strip()
+    return token or None
+
+
+def _verify_firebase_token(id_token: str) -> str:
+    if not firebase_admin or not firebase_auth:
+        raise HTTPException(status_code=503, detail="Authentication service unavailable")
+    try:
+        decoded = firebase_auth.verify_id_token(id_token)
+        uid = decoded.get("uid")
+        if not uid:
+            raise HTTPException(status_code=401, detail="Invalid authentication token")
+        return uid
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
+
+
+def get_optional_user_uid(authorization: Optional[str] = Header(default=None)) -> Optional[str]:
+    token = _bearer_token_from_header(authorization)
+    if not token:
+        return None
+    return _verify_firebase_token(token)
+
+
+def get_current_user_uid(authorization: Optional[str] = Header(default=None)) -> str:
+    token = _bearer_token_from_header(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return _verify_firebase_token(token)
+
+
 # ── Startup ───────────────────────────────────────────────────────────
 @app.on_event("startup")
 def on_startup():
     init_db()
+    _init_firebase_admin()
 
 
 # =====================================================================
 #  CHAT ENDPOINTS
 # =====================================================================
 
+def _history_from_db(chat_session: ChatSession) -> list[dict]:
+    return [{"role": msg.role, "content": msg.content} for msg in chat_session.messages]
+
+
+def _load_or_seed_history(
+    *,
+    student_uid: Optional[str],
+    session_id: str,
+    chat_session: Optional[ChatSession] = None,
+) -> list[dict]:
+    cache_uid = student_uid or "guest"
+    cached = session_cache.get_history(cache_uid, session_id)
+    if cached is not None:
+        return cached
+    if chat_session is None:
+        return []
+
+    history = _history_from_db(chat_session)
+    session_cache.set_history(cache_uid, session_id, history)
+    return history
+
+
+def _build_session_title(question: str) -> str:
+    trimmed = question.strip()
+    if not trimmed:
+        return "New Chat"
+    return trimmed[:35] + ("…" if len(trimmed) > 35 else "")
+
+
+def _is_transient_model_error(err: Exception) -> bool:
+    text = str(err).upper()
+    return "503" in text or "UNAVAILABLE" in text or "OVERLOADED" in text or "HIGH DEMAND" in text
+
+
+def _generate_chat_response(contents: list, system_prompt: str) -> str:
+    models = [PRIMARY_CHAT_MODEL]
+    if FALLBACK_CHAT_MODEL and FALLBACK_CHAT_MODEL not in models:
+        models.append(FALLBACK_CHAT_MODEL)
+
+    last_error: Exception | None = None
+
+    for model_name in models:
+        for attempt in range(CHAT_MODEL_RETRY_ATTEMPTS):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        safety_settings=SAFETY_SETTINGS,
+                    ),
+                )
+                return response.text or ""
+            except Exception as e:
+                last_error = e
+                is_last_attempt = attempt == CHAT_MODEL_RETRY_ATTEMPTS - 1
+                if not _is_transient_model_error(e) or is_last_attempt:
+                    break
+                time.sleep(CHAT_MODEL_RETRY_DELAY_SECONDS)
+
+    if last_error and _is_transient_model_error(last_error):
+        raise HTTPException(
+            status_code=503,
+            detail="Tutor model is temporarily busy. Please try again in a moment.",
+        )
+    if last_error:
+        raise last_error
+    raise HTTPException(status_code=500, detail="Failed to generate a tutor response")
+
+
+@app.get("/sessions", response_model=list[SessionSummaryResponse])
+async def list_sessions(
+    module_id: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+    student_uid: str = Depends(get_current_user_uid),
+):
+    query = db.query(ChatSession).filter(ChatSession.student_uid == student_uid)
+    if module_id:
+        query = query.filter(ChatSession.module_id == module_id)
+    sessions = query.order_by(ChatSession.updated_at.desc()).all()
+    return [
+        SessionSummaryResponse(
+            session_id=row.id,
+            title=row.title,
+            module_id=row.module_id,
+            created_at=row.created_at.isoformat(),
+            updated_at=row.updated_at.isoformat(),
+            message_count=len(row.messages),
+        )
+        for row in sessions
+    ]
+
+
 @app.post("/chat", response_model=ConversationResponse)
-async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
+async def chat(
+    data: ConversationRequest,
+    db: Session = Depends(get_db),
+    student_uid: Optional[str] = Depends(get_optional_user_uid),
+):
     """Send a message in a continuous conversation.
 
     When ``module_id`` is supplied the response is scoped to that module
@@ -311,8 +519,40 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
         if not question:
             raise HTTPException(status_code=400, detail="Please provide a question")
 
-        session_id = data.session_id or str(uuid.uuid4())
-        history = session_store.get_history(session_id) or []
+        chat_session = None
+        if student_uid:
+            if data.session_id:
+                chat_session = (
+                    db.query(ChatSession)
+                    .filter(
+                        ChatSession.id == data.session_id,
+                        ChatSession.student_uid == student_uid,
+                    )
+                    .first()
+                )
+                if not chat_session:
+                    raise HTTPException(status_code=404, detail="Session not found")
+                if data.module_id and chat_session.module_id and chat_session.module_id != data.module_id:
+                    raise HTTPException(status_code=400, detail="Session module does not match requested module")
+            else:
+                chat_session = ChatSession(
+                    student_uid=student_uid,
+                    module_id=data.module_id,
+                    title="New Chat",
+                )
+                db.add(chat_session)
+                db.commit()
+                db.refresh(chat_session)
+
+            session_id = chat_session.id
+        else:
+            session_id = data.session_id or str(uuid.uuid4())
+
+        history = _load_or_seed_history(
+            student_uid=student_uid,
+            session_id=session_id,
+            chat_session=chat_session,
+        )
 
         # ---- build system prompt (base + optional RAG context) --------
         system_prompt = BASE_SYSTEM_PROMPT
@@ -363,16 +603,7 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
             types.Content(role="user", parts=[types.Part(text=question)])
         )
 
-        response = client.models.generate_content(
-            model="gemini-3.1-flash-lite-preview",
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                safety_settings=SAFETY_SETTINGS,
-            ),
-        )
-
-        answer = response.text
+        answer = _generate_chat_response(contents, system_prompt)
 
         # ---- Validation with GitHub models (required) ----
         validation_result = None
@@ -395,13 +626,22 @@ async def chat(data: ConversationRequest, db: Session = Depends(get_db)):
             print(f"[ERROR] Validation failed: {e}")
             validation_result = {"error": str(e)}
 
-        session_store.append_messages(
-            session_id,
-            [
-                {"role": "user", "content": question},
-                {"role": "assistant", "content": answer},
-            ],
-        )
+        persisted_messages = [
+            {"role": "user", "content": question},
+            {"role": "assistant", "content": answer},
+        ]
+        if student_uid and chat_session:
+            if chat_session.title == "New Chat":
+                prior_user_messages = [m for m in history if m.get("role") == "user"]
+                if not prior_user_messages:
+                    chat_session.title = _build_session_title(question)
+            chat_session.updated_at = datetime.now(timezone.utc)
+            db.add(ChatMessage(session_id=chat_session.id, role="user", content=question))
+            db.add(ChatMessage(session_id=chat_session.id, role="assistant", content=answer))
+            db.commit()
+
+        cache_uid = student_uid or "guest"
+        session_cache.append_messages(cache_uid, session_id, persisted_messages)
 
         flag_category = None
         flag_severity = None
@@ -448,19 +688,90 @@ async def ask(data: dict):
         return {"answer": f"Error: {str(e)}", "error": True}
 
 
-@app.get("/session/{session_id}")
-async def get_session(session_id: str):
-    history = session_store.get_history(session_id)
-    if not history:
+@app.get("/session/{session_id}", response_model=SessionDetailResponse)
+async def get_session(
+    session_id: str,
+    db: Session = Depends(get_db),
+    student_uid: str = Depends(get_current_user_uid),
+):
+    chat_session = (
+        db.query(ChatSession)
+        .filter(ChatSession.id == session_id, ChatSession.student_uid == student_uid)
+        .first()
+    )
+    if not chat_session:
         raise HTTPException(status_code=404, detail="Session not found")
-    return {"session_id": session_id, "history": history}
+    history = _load_or_seed_history(
+        student_uid=student_uid,
+        session_id=session_id,
+        chat_session=chat_session,
+    )
+    return SessionDetailResponse(
+        session_id=chat_session.id,
+        title=chat_session.title,
+        module_id=chat_session.module_id,
+        created_at=chat_session.created_at.isoformat(),
+        updated_at=chat_session.updated_at.isoformat(),
+        history=history,
+    )
+
+
+@app.patch("/session/{session_id}")
+async def rename_session(
+    session_id: str,
+    body: RenameSessionRequest,
+    db: Session = Depends(get_db),
+    student_uid: str = Depends(get_current_user_uid),
+):
+    title = (body.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Session title is required")
+
+    chat_session = (
+        db.query(ChatSession)
+        .filter(ChatSession.id == session_id, ChatSession.student_uid == student_uid)
+        .first()
+    )
+    if not chat_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    chat_session.title = title[:255]
+    chat_session.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(chat_session)
+    return {"session_id": chat_session.id, "title": chat_session.title}
 
 
 @app.delete("/session/{session_id}")
-async def delete_session(session_id: str):
-    if session_store.delete(session_id):
-        return {"message": "Session deleted"}
-    raise HTTPException(status_code=404, detail="Session not found")
+async def delete_session(
+    session_id: str,
+    db: Session = Depends(get_db),
+    student_uid: str = Depends(get_current_user_uid),
+):
+    chat_session = (
+        db.query(ChatSession)
+        .filter(ChatSession.id == session_id, ChatSession.student_uid == student_uid)
+        .first()
+    )
+    if not chat_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    db.delete(chat_session)
+    db.commit()
+    session_cache.delete(student_uid, session_id)
+    return {"message": "Session deleted"}
+
+
+@app.delete("/sessions")
+async def clear_all_sessions(
+    db: Session = Depends(get_db),
+    student_uid: str = Depends(get_current_user_uid),
+):
+    sessions = db.query(ChatSession).filter(ChatSession.student_uid == student_uid).all()
+    for row in sessions:
+        db.delete(row)
+    db.commit()
+    session_cache.delete_user_sessions(student_uid)
+    return {"message": "All chat history cleared", "deleted_sessions": len(sessions)}
 
 
 # =====================================================================
