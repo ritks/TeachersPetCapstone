@@ -56,7 +56,7 @@ const QUICK_ACTIONS = CHAT_COPY.quickActions.map((action, index) => ({
 function StudentEmptyState({ greeting, onQuickAction }) {
   return (
     <div className="flex flex-col items-center justify-center h-full px-6 py-12 select-none">
-      <Card className="w-full max-w-4xl p-7 md:p-8 border-[rgba(65,90,119,0.22)] bg-[linear-gradient(145deg,rgba(248,249,250,0.95),rgba(232,240,249,0.86))] shadow-[0_18px_36px_rgba(27,38,59,0.14)]">
+      <Card className="w-full max-w-4xl p-7 md:p-8 border-[var(--color-border-card)] tp-card-surface-soft shadow-[var(--shadow-lg)]">
         <div className="flex flex-col items-center">
           <LogoMark containerClassName="w-16 h-16 rounded-2xl bg-[var(--color-brand-50)] border border-[var(--color-brand-100)] mb-5 p-1" />
           <h2 className="text-3xl font-semibold text-[var(--color-text-primary)] text-center mb-2">{greeting}</h2>
@@ -70,7 +70,7 @@ function StudentEmptyState({ greeting, onQuickAction }) {
           <Card
             key={action.title}
             interactive
-            className="flex flex-col gap-2.5 p-4 text-left cursor-pointer border-[rgba(65,90,119,0.2)] bg-white/80 hover:-translate-y-0.5 transition-all"
+            className="flex flex-col gap-2.5 p-4 text-left cursor-pointer border-[var(--color-border-card-subtle)] bg-white/80 hover:-translate-y-0.5 transition-all"
             onClick={() => onQuickAction(action.response)}
           >
             <div className={`w-8 h-8 rounded-lg ${action.iconBg} ${action.iconColor} flex items-center justify-center`}>
@@ -162,14 +162,14 @@ function InputBar({ value, onChange, onSubmit, disabled }) {
 
   return (
     <div className="px-4 pb-4 pt-2">
-      <form onSubmit={onSubmit} className="max-w-3xl mx-auto flex gap-2 items-center rounded-[1.1rem] border border-[rgba(65,90,119,0.2)] bg-[rgba(248,249,250,0.88)] backdrop-blur-md px-3 py-2 shadow-[0_10px_24px_rgba(27,38,59,0.14)]">
+      <form onSubmit={onSubmit} className="max-w-3xl mx-auto flex gap-2 items-center rounded-[1.1rem] border border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-md px-3 py-2 shadow-[var(--shadow-md)]">
         <Input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={CHAT_COPY.inputPlaceholder}
           disabled={disabled}
-          className="flex-1 rounded-[var(--radius-pill)] px-5 py-2.5 disabled:opacity-50 bg-white/80 border-[rgba(65,90,119,0.22)]"
+          className="flex-1 rounded-[var(--radius-pill)] px-5 py-2.5 disabled:opacity-50 bg-white/80 border-[var(--color-border-card)]"
         />
         {speechSupported && (
           <button
@@ -182,8 +182,8 @@ function InputBar({ value, onChange, onSubmit, disabled }) {
             className={[
               'flex-shrink-0 rounded-full p-2.5 border transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
               listening
-                ? 'border-red-300 bg-red-50 text-red-600 hover:bg-red-100'
-                : 'border-[rgba(65,90,119,0.24)] bg-white/80 text-[var(--color-text-secondary)] hover:bg-white',
+                ? 'border-[var(--color-danger-500)] bg-[var(--color-danger-50)] text-[var(--color-danger-500)] hover:bg-[var(--color-danger-50)]'
+                : 'border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted-white)] text-[var(--color-text-secondary)] hover:bg-[var(--bg-frosted)]',
             ].join(' ')}
           >
             {listening ? (
@@ -217,7 +217,7 @@ function TypingIndicator() {
   return (
     <div className="flex items-end gap-2">
       <LogoMark containerClassName="w-8 h-8 rounded-full bg-[var(--color-primary-700)] border border-[rgba(255,255,255,0.4)] flex-shrink-0 shadow-sm p-0.5" imgClassName="rounded-full" />
-      <div className="bg-[rgba(248,249,250,0.9)] border border-[rgba(65,90,119,0.2)] rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+      <div className="bg-[var(--bg-frosted)] border border-[var(--color-border-card-subtle)] rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
         <div className="flex gap-1.5 items-center h-3">
           <span className="w-2 h-2 bg-[var(--color-brand-500)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
           <span className="w-2 h-2 bg-[var(--color-brand-500)] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -252,7 +252,7 @@ function CitationCards({ citations, onCitationClick }) {
           key={`${c.document_id}-${c.page_start}-${i}`}
           type="button"
           onClick={() => onCitationClick?.(c)}
-          className="group flex items-start gap-2 rounded-lg border border-[rgba(65,90,119,0.18)] bg-white/70 hover:bg-white hover:border-[var(--color-brand-300)] px-3 py-2 text-left transition-all cursor-pointer"
+          className="group flex items-start gap-2 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 hover:bg-white hover:border-[var(--color-brand-300)] px-3 py-2 text-left transition-all cursor-pointer"
         >
           <span className="flex-shrink-0 w-5 h-5 rounded bg-amber-100 text-amber-700 text-[0.65rem] font-bold flex items-center justify-center mt-0.5">
             {c.ref}
@@ -356,14 +356,14 @@ export function Bubble({ message, onCitationClick }) {
         className={[
           'max-w-[75%] px-4 py-2.5 shadow-sm',
           isStudent
-            ? 'bg-gradient-to-br from-[var(--color-brand-600)] to-[var(--color-brand-700)] rounded-2xl rounded-br-sm border border-[rgba(255,255,255,0.22)]'
+            ? 'tp-student-bubble border rounded-2xl rounded-br-sm'
             : message.isError
-              ? 'bg-red-50 border border-red-200 rounded-2xl rounded-bl-sm'
-              : 'bg-[rgba(248,249,250,0.9)] border border-[rgba(65,90,119,0.2)] rounded-2xl rounded-bl-sm',
+              ? 'bg-[var(--color-danger-50)] border border-[var(--color-danger-500)] rounded-2xl rounded-bl-sm'
+              : 'bg-[var(--bg-frosted)] border border-[var(--color-border-card-subtle)] rounded-2xl rounded-bl-sm',
         ].join(' ')}
       >
         {isStudent ? (
-          <p className="text-sm leading-relaxed whitespace-pre-wrap text-white">
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">
             {message.content}
           </p>
         ) : (
@@ -387,7 +387,7 @@ export function Bubble({ message, onCitationClick }) {
             'flex-shrink-0 self-end mb-1 rounded-full p-1.5 border transition-colors',
             speaking
                 ? 'border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-              : 'border-[rgba(65,90,119,0.2)] bg-white/80 text-[var(--color-text-muted)] hover:bg-white hover:text-[var(--color-brand-600)]',
+              : 'border-[var(--color-border-card-subtle)] bg-white/80 text-[var(--color-text-muted)] hover:bg-white hover:text-[var(--color-brand-600)]',
           ].join(' ')}
         >
           {speaking ? (
@@ -527,7 +527,7 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
 
   return (
     <>
-      <section className="flex-1 overflow-y-auto px-4 py-6 bg-[linear-gradient(160deg,rgba(248,249,250,0.96),rgba(231,239,248,0.78))]">
+      <section className="flex-1 overflow-y-auto px-4 py-6 tp-card-surface-soft">
         {isStudentEmptyState ? (
           <StudentEmptyState greeting={greeting} onQuickAction={handleQuickAction} />
         ) : (

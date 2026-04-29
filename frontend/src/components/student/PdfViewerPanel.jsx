@@ -87,12 +87,12 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
   // If no PDF citations, show placeholder
   if (!pdfUrl) {
     return (
-      <div className="flex flex-col h-full border-l border-[rgba(65,90,119,0.18)] bg-[rgba(248,249,250,0.96)]">
-        <div className="flex items-center justify-between px-4 py-2 border-b border-[rgba(65,90,119,0.18)] bg-[rgba(248,249,250,0.82)] backdrop-blur-sm flex-shrink-0">
+      <div className="flex flex-col h-full border-t md:border-t-0 md:border-l border-[var(--color-border-card-subtle)] bg-[var(--color-bg-canvas)]">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-sm flex-shrink-0">
           <span className="text-sm font-semibold text-[var(--color-text-primary)]">Document Viewer</span>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(65,90,119,0.1)] transition-colors"
+            className="rounded-md p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-muted)] transition-colors"
             title="Close viewer"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -113,9 +113,9 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
   const citedPages = [...new Set(pdfCitations.map((c) => c.page_start).filter(Boolean))]
 
   return (
-    <div className="flex flex-col h-full border-l border-[rgba(65,90,119,0.18)] bg-[rgba(248,249,250,0.96)]">
+    <div className="flex flex-col h-full border-t md:border-t-0 md:border-l border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)]">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-[rgba(65,90,119,0.18)] bg-[rgba(248,249,250,0.82)] backdrop-blur-sm flex-shrink-0">
+      <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-sm flex-shrink-0">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate" title={activeFilename}>
             {activeFilename || 'Document'}
@@ -128,7 +128,7 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
         </div>
         <button
           onClick={onClose}
-          className="rounded-md p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(65,90,119,0.1)] transition-colors flex-shrink-0"
+          className="rounded-md p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-muted)] transition-colors flex-shrink-0"
           title="Close viewer"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -138,7 +138,7 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
       </div>
 
       {/* Page navigation */}
-      <div className="flex items-center justify-center gap-2 px-3 py-1.5 border-b border-[rgba(65,90,119,0.12)] bg-white/60 flex-shrink-0">
+      <div className="flex items-center justify-center gap-2 px-3 py-1.5 border-b border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] flex-shrink-0">
         <Button
           onClick={() => goToPage(currentPage - 1)}
           disabled={currentPage <= 1}
@@ -161,7 +161,7 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
                   'text-xs px-2 py-0.5 rounded-full border transition-colors',
                   currentPage === p
                     ? 'bg-[var(--color-brand-600)] text-white border-[var(--color-brand-600)]'
-                    : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
+                    : 'bg-[var(--color-warning-50)] text-[var(--color-warning-600)] border-[var(--color-warning-600)] hover:bg-[var(--color-bg-muted)]',
                 ].join(' ')}
                 title={`Go to cited page ${p}`}
               >
@@ -185,10 +185,10 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
       </div>
 
       {/* PDF content */}
-      <div ref={containerRef} className="flex-1 overflow-y-auto flex justify-center bg-[rgba(107,114,128,0.08)] p-4">
+      <div ref={containerRef} className="flex-1 overflow-y-auto flex justify-center bg-[var(--color-bg-canvas)] p-4">
         {error ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-red-500">{error}</p>
+            <p className="text-sm text-[var(--color-danger-500)]">{error}</p>
           </div>
         ) : (
           <Document

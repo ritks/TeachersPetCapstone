@@ -53,25 +53,25 @@ export default function StudentLoginPage({ onSuccess, embedded = false }) {
       {!embedded && (
         <div className="text-center mb-8">
           <LogoMark containerClassName="w-14 h-14 rounded-2xl border border-[var(--color-brand-100)] mx-auto mb-3 p-1" />
-          <h2 className="text-2xl font-bold text-gray-800">{STUDENT_LOGIN_COPY.title}</h2>
-          <p className="text-gray-400 text-sm mt-1">{STUDENT_LOGIN_COPY.subtitle}</p>
+          <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">{STUDENT_LOGIN_COPY.title}</h2>
+          <p className="text-[var(--color-text-muted)] text-sm mt-1">{STUDENT_LOGIN_COPY.subtitle}</p>
         </div>
       )}
 
-      <Panel className={embedded ? 'p-5 bg-white/92 backdrop-blur-sm border-indigo-100 shadow-[0_14px_32px_rgba(27,38,59,0.12)]' : 'p-6'}>
+      <Panel className={embedded ? 'p-5 bg-white/92 backdrop-blur-sm border-indigo-100 shadow-[var(--shadow-lg)]' : 'p-6'}>
         {embedded && (
           <div className="mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">{STUDENT_LOGIN_COPY.title}</h3>
-            <p className="text-sm text-gray-500 mt-1">{STUDENT_LOGIN_COPY.subtitle}</p>
+            <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">{STUDENT_LOGIN_COPY.title}</h3>
+            <p className="text-sm text-[var(--color-text-secondary)] mt-1">{STUDENT_LOGIN_COPY.subtitle}</p>
           </div>
         )}
 
-        <div className="flex rounded-lg bg-gray-100 p-1 mb-5">
+        <div className="flex rounded-lg bg-[var(--color-bg-muted)] p-1 mb-5">
           <button
             onClick={() => { setMode('signin'); setError('') }}
             className={[
               'flex-1 rounded-md text-sm font-medium py-1.5 transition-all',
-              mode === 'signin' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+              mode === 'signin' ? 'bg-white text-[var(--color-text-primary)] shadow-sm' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]',
             ].join(' ')}
           >
             {STUDENT_LOGIN_COPY.signIn}
@@ -80,7 +80,7 @@ export default function StudentLoginPage({ onSuccess, embedded = false }) {
             onClick={() => { setMode('register'); setError('') }}
             className={[
               'flex-1 rounded-md text-sm font-medium py-1.5 transition-all',
-              mode === 'register' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+              mode === 'register' ? 'bg-white text-[var(--color-text-primary)] shadow-sm' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]',
             ].join(' ')}
           >
             {STUDENT_LOGIN_COPY.createAccount}
@@ -127,9 +127,9 @@ export default function StudentLoginPage({ onSuccess, embedded = false }) {
         </form>
 
         <div className="flex items-center gap-3 my-4">
-          <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-xs text-gray-400">{STUDENT_LOGIN_COPY.or}</span>
-          <div className="flex-1 h-px bg-gray-200" />
+          <div className="flex-1 h-px bg-[var(--color-border-subtle)]" />
+          <span className="text-xs text-[var(--color-text-muted)]">{STUDENT_LOGIN_COPY.or}</span>
+          <div className="flex-1 h-px bg-[var(--color-border-subtle)]" />
         </div>
 
         <Button

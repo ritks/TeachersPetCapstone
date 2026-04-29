@@ -2,30 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import AnalyticsDashboard from '../AnalyticsDashboard'
 import { addDoc, collection, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
 import { db } from '../../firebase'
-import { Badge, Button, Card, Input, Panel } from '../ui/primitives'
+import { Badge, Button, Card, Input, Panel, StatCard } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
 import { apiUrl } from '../../lib/api'
 import DocumentPanel from './DocumentPanel'
-
-function DashboardStat({ label, value, tone }) {
-  const tones = {
-    blue: 'from-[rgba(65,90,119,0.28)] to-[rgba(65,90,119,0.12)] text-[var(--color-primary-700)]',
-    purple: 'from-[rgba(65,90,119,0.24)] to-[rgba(27,38,59,0.12)] text-[var(--color-primary-700)]',
-    amber: 'from-[rgba(65,90,119,0.2)] to-[rgba(248,249,250,0.28)] text-[var(--color-primary-700)]',
-    green: 'from-[rgba(45,106,79,0.22)] to-[rgba(65,90,119,0.12)] text-[var(--color-primary-700)]',
-  }
-
-  return (
-    <Card className="p-4 border-[rgba(65,90,119,0.22)] bg-[linear-gradient(145deg,rgba(236,241,246,0.9),rgba(225,233,242,0.72))] backdrop-blur-sm">
-      <div className="flex items-center gap-3">
-        <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${tones[tone]} flex items-center justify-center font-bold text-lg`}>
-          {value}
-        </div>
-        <p className="text-sm font-medium text-[var(--color-text-secondary)]">{label}</p>
-      </div>
-    </Card>
-  )
-}
+import ThemeToggleButton from '../common/ThemeToggleButton'
 
 function DashboardCard({ title, description, icon, tag, tagTone = 'neutral', cta = 'Open', onClick }) {
   const ctaText = onClick ? `${cta} →` : 'Coming soon →'
@@ -34,12 +15,12 @@ function DashboardCard({ title, description, icon, tag, tagTone = 'neutral', cta
       interactive
       onClick={onClick}
       className={[
-        'p-5 border-[rgba(65,90,119,0.22)] bg-[linear-gradient(150deg,rgba(236,241,246,0.9),rgba(223,232,242,0.72))] backdrop-blur-sm group',
+        'p-5 border-[var(--color-border-card)] tp-card-surface backdrop-blur-sm group',
         onClick ? 'cursor-pointer' : 'cursor-default',
       ].join(' ')}
     >
       <div className="flex items-center justify-between mb-3">
-        <div className="w-9 h-9 rounded-lg border border-[rgba(65,90,119,0.24)] bg-[rgba(248,249,250,0.72)] flex items-center justify-center text-[var(--color-primary-700)]">
+        <div className="w-9 h-9 rounded-lg border border-[var(--color-border-card-subtle)] bg-[var(--color-bg-muted)] flex items-center justify-center text-[var(--color-text-secondary)]">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             {icon}
           </svg>
@@ -885,7 +866,7 @@ function ClassManagementPanel({ currentUser }) {
   }
 
   return (
-    <Panel className="p-5 md:p-6 bg-[linear-gradient(152deg,rgba(236,243,250,0.9),rgba(221,232,244,0.76))] border-[rgba(65,90,119,0.24)] backdrop-blur-sm">
+    <Panel className="p-5 md:p-6 tp-card-surface border-[var(--color-border-card-subtle)] backdrop-blur-sm">
       <div className="flex items-start justify-between gap-4 mb-5">
         <div>
           <h3 className="text-xl font-semibold text-[var(--color-text-primary)]">Class Management</h3>
@@ -901,7 +882,7 @@ function ClassManagementPanel({ currentUser }) {
       </div>
 
       {showCreateClassForm && (
-        <form onSubmit={handleCreateClass} className="mb-6 rounded-xl border border-[rgba(65,90,119,0.24)] bg-white/80 p-4">
+        <form onSubmit={handleCreateClass} className="mb-6 rounded-xl border border-[var(--color-border-card-subtle)] bg-white/80 p-4">
           <p className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">New Class</p>
           <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
             <Input value={newClassName} onChange={(e) => setNewClassName(e.target.value)} placeholder="Class name (e.g. Algebra 1)" required />
@@ -919,12 +900,12 @@ function ClassManagementPanel({ currentUser }) {
       )}
 
       {!!errorMessage && (
-        <div className="mb-4 rounded-lg border border-[rgba(220,38,38,0.25)] bg-[rgba(254,242,242,0.8)] px-3 py-2 text-sm text-[var(--color-danger-600)]">
+        <div className="mb-4 rounded-lg border border-[var(--color-danger-500)] bg-[var(--color-danger-50)] px-3 py-2 text-sm text-[var(--color-danger-600)]">
           {errorMessage}
         </div>
       )}
       {!!infoMessage && (
-        <div className="mb-4 rounded-lg border border-[rgba(65,90,119,0.22)] bg-[rgba(248,249,250,0.84)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+        <div className="mb-4 rounded-lg border border-[var(--color-border-card)] bg-[var(--bg-frosted)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
           {infoMessage}
         </div>
       )}
@@ -946,7 +927,7 @@ function ClassManagementPanel({ currentUser }) {
                     key={classItem.id}
                     interactive
                     onClick={() => setSelectedClassId(classItem.id)}
-                    className="p-5 border-[rgba(65,90,119,0.24)] bg-[linear-gradient(150deg,rgba(236,241,246,0.92),rgba(223,232,242,0.78))] cursor-pointer hover:-translate-y-0.5 transition-all"
+                    className="p-5 border-[var(--color-border-card-subtle)] tp-card-surface cursor-pointer hover:-translate-y-0.5 transition-all"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -958,17 +939,17 @@ function ClassManagementPanel({ currentUser }) {
                       <Badge tone="brand">Class</Badge>
                     </div>
                     <div className="grid grid-cols-3 gap-2.5 mt-4">
-                      <div className="rounded-xl border border-[rgba(65,90,119,0.2)] bg-[linear-gradient(150deg,rgba(248,249,250,0.94),rgba(236,241,248,0.9))] px-3 py-2.5">
+                      <div className="rounded-xl border border-[var(--color-border-card-subtle)] tp-card-surface-soft px-3 py-2.5">
                         <p className="text-[0.58rem] leading-none font-semibold uppercase tracking-[0.1em] whitespace-nowrap text-[var(--color-text-muted)]">Modules</p>
-                        <p className="text-[1.35rem] leading-none font-semibold text-[var(--color-primary-700)] mt-1">{insight.modules}</p>
+                        <p className="text-[1.35rem] leading-none font-semibold text-[var(--color-text-primary)] mt-1">{insight.modules}</p>
                       </div>
-                      <div className="rounded-xl border border-[rgba(65,90,119,0.2)] bg-[linear-gradient(150deg,rgba(248,249,250,0.94),rgba(236,241,248,0.9))] px-3 py-2.5">
+                      <div className="rounded-xl border border-[var(--color-border-card-subtle)] tp-card-surface-soft px-3 py-2.5">
                         <p className="text-[0.58rem] leading-none font-semibold uppercase tracking-[0.1em] whitespace-nowrap text-[var(--color-text-muted)]">Students</p>
-                        <p className="text-[1.35rem] leading-none font-semibold text-[var(--color-primary-700)] mt-1">{insight.activeStudents}</p>
+                        <p className="text-[1.35rem] leading-none font-semibold text-[var(--color-text-primary)] mt-1">{insight.activeStudents}</p>
                       </div>
-                      <div className="rounded-xl border border-[rgba(65,90,119,0.2)] bg-[linear-gradient(150deg,rgba(248,249,250,0.94),rgba(236,241,248,0.9))] px-3 py-2.5">
+                      <div className="rounded-xl border border-[var(--color-border-card-subtle)] tp-card-surface-soft px-3 py-2.5">
                         <p className="text-[0.58rem] leading-none font-semibold uppercase tracking-[0.1em] whitespace-nowrap text-[var(--color-text-muted)]">Insights</p>
-                        <p className="text-[1.35rem] leading-none font-semibold text-[var(--color-primary-700)] mt-1">{insight.totalPrompts}</p>
+                        <p className="text-[1.35rem] leading-none font-semibold text-[var(--color-text-primary)] mt-1">{insight.totalPrompts}</p>
                       </div>
                     </div>
                     <p className="text-sm font-semibold text-[var(--color-brand-600)] mt-4">Open Course →</p>
@@ -1006,7 +987,7 @@ function ClassManagementPanel({ currentUser }) {
                   <Button type="button" variant="secondary" size="sm" onClick={() => setSelectedClassId(null)}>
                     ← Back To All Courses
                   </Button>
-                  <Card className="p-5 border-[rgba(65,90,119,0.24)] bg-[linear-gradient(150deg,rgba(236,241,246,0.92),rgba(223,232,242,0.78))]">
+                  <Card className="p-5 border-[var(--color-border-card-subtle)] tp-card-surface">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h4 className="text-lg font-semibold text-[var(--color-text-primary)]">{classItem.name}</h4>
@@ -1018,22 +999,22 @@ function ClassManagementPanel({ currentUser }) {
                     </div>
 
                     <div className="grid grid-cols-3 gap-2 mt-4">
-                      <div className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 px-3 py-2">
+                      <div className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 px-3 py-2">
                         <p className="text-[0.68rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">Modules</p>
                         <p className="text-lg font-semibold text-[var(--color-text-primary)]">{insight.modules}</p>
                       </div>
-                      <div className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 px-3 py-2">
+                      <div className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 px-3 py-2">
                         <p className="text-[0.68rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">Active Students</p>
                         <p className="text-lg font-semibold text-[var(--color-text-primary)]">{insight.activeStudents}</p>
                       </div>
-                      <div className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 px-3 py-2">
+                      <div className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 px-3 py-2">
                         <p className="text-[0.68rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">Insights</p>
                         <p className="text-lg font-semibold text-[var(--color-text-primary)]">{insight.totalPrompts}</p>
                       </div>
                     </div>
 
                     <p className="text-xs text-[var(--color-text-muted)] mt-3">{formatLatestActivity(insight.latestTs)}</p>
-                    <div className="mt-4 rounded-xl border border-[rgba(65,90,119,0.22)] bg-[rgba(255,255,255,0.46)] p-2 grid grid-cols-3 gap-1.5">
+                    <div className="mt-4 rounded-xl border border-[var(--color-border-card)] bg-[rgba(255,255,255,0.46)] p-2 grid grid-cols-3 gap-1.5">
                       <Button
                         type="button"
                         size="sm"
@@ -1064,7 +1045,7 @@ function ClassManagementPanel({ currentUser }) {
                     </div>
 
                     {classDetailTab === 'roster' && (
-                      <div className="mt-4 rounded-xl border border-[rgba(65,90,119,0.2)] bg-white/65 p-3">
+                      <div className="mt-4 rounded-xl border border-[var(--color-border-card-subtle)] bg-white/65 p-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-[var(--color-text-primary)]">Class Roster</p>
                           <Badge tone="neutral">{classStudents.length} enrolled</Badge>
@@ -1095,7 +1076,7 @@ function ClassManagementPanel({ currentUser }) {
                             <span className="text-xs text-[var(--color-text-muted)]">No students yet.</span>
                           ) : (
                             classStudents.map((s) => (
-                              <div key={`${classItem.id}-${s.studentEmail}`} className="rounded-lg border border-[rgba(65,90,119,0.16)] bg-white/80 px-2.5 py-2 text-sm text-[var(--color-text-secondary)]">
+                              <div key={`${classItem.id}-${s.studentEmail}`} className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/80 px-2.5 py-2 text-sm text-[var(--color-text-secondary)]">
                                 {s.studentEmail}
                               </div>
                             ))
@@ -1105,7 +1086,7 @@ function ClassManagementPanel({ currentUser }) {
                     )}
 
                     {classDetailTab === 'groups' && (
-                      <div className="mt-4 rounded-xl border border-[rgba(65,90,119,0.2)] bg-white/65 p-3">
+                      <div className="mt-4 rounded-xl border border-[var(--color-border-card-subtle)] bg-white/65 p-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-[var(--color-text-primary)]">Student Groups</p>
                           <Badge tone="neutral">{classGroups.length} groups</Badge>
@@ -1138,7 +1119,7 @@ function ClassManagementPanel({ currentUser }) {
                             </div>
                           ) : (
                             classGroups.map((groupItem) => (
-                              <div key={groupItem.id} className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/75 p-3">
+                              <div key={groupItem.id} className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/75 p-3">
                                 <div className="flex items-center justify-between gap-2">
                                   <p className="text-sm font-semibold text-[var(--color-text-primary)]">{groupItem.name}</p>
                                   <Badge tone="brand">{(groupItem.members || []).length} students</Badge>
@@ -1195,7 +1176,7 @@ function ClassManagementPanel({ currentUser }) {
                           <select
                             value={moduleStatusFilter}
                             onChange={(e) => setModuleStatusFilter(e.target.value)}
-                            className="rounded-lg border border-[rgba(65,90,119,0.24)] bg-white px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[rgba(65,90,119,0.36)]"
+                            className="tp-input"
                           >
                             <option value="all">All Statuses</option>
                             <option value="active">Active</option>
@@ -1204,7 +1185,7 @@ function ClassManagementPanel({ currentUser }) {
                         </div>
 
                         {draft.open && (
-                          <div className="mt-3 rounded-xl border border-[rgba(65,90,119,0.22)] bg-white/80 p-3">
+                          <div className="mt-3 rounded-xl border border-[var(--color-border-card)] bg-white/80 p-3">
                             <div className="grid grid-cols-1 gap-2">
                               <Input
                                 value={draft.name}
@@ -1250,7 +1231,7 @@ function ClassManagementPanel({ currentUser }) {
                               )
 
                               return (
-                                <div key={moduleItem.id} className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 p-3">
+                                <div key={moduleItem.id} className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 p-3">
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
                                       <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{moduleItem.name}</p>
@@ -1339,7 +1320,7 @@ function ClassManagementPanel({ currentUser }) {
                                   </div>
 
                                   {openDocumentsByModule[moduleItem.id] && (
-                                    <div className="mt-3 rounded-lg border border-[rgba(65,90,119,0.16)] bg-white/80">
+                                    <div className="mt-3 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/80">
                                       <DocumentPanel
                                         moduleId={moduleItem.id}
                                         documents={documentsByModule[moduleItem.id] || []}
@@ -1349,7 +1330,7 @@ function ClassManagementPanel({ currentUser }) {
                                   )}
 
                                   <div className="mt-2.5">
-                                    <p className="text-[0.72rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)] mb-1.5">
+                                    <p className="tp-eyebrow mb-1.5">
                                       Assign Groups
                                     </p>
                                     <div className="flex flex-wrap gap-1.5">
@@ -1380,8 +1361,8 @@ function ClassManagementPanel({ currentUser }) {
                                   </div>
 
                                   {classStudents.length > 0 && (
-                                    <div className="mt-3 rounded-lg border border-[rgba(65,90,119,0.16)] bg-[rgba(248,249,250,0.76)] p-2.5">
-                                      <p className="text-[0.72rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)] mb-1.5">
+                                    <div className="mt-3 rounded-lg border border-[var(--color-border-card-subtle)] bg-[var(--color-bg-muted)] p-2.5">
+                                      <p className="tp-eyebrow mb-1.5">
                                         Individual Overrides
                                       </p>
                                       <div className="flex flex-wrap gap-1.5">
@@ -1503,7 +1484,7 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_84%_14%,rgba(65,90,119,0.34),rgba(65,90,119,0)_54%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(122deg,rgba(27,38,59,0.14),rgba(27,38,59,0.02)_42%,rgba(65,90,119,0.2)_100%)]" />
 
-      <header className="relative z-10 border-b border-[rgba(65,90,119,0.24)] bg-[linear-gradient(180deg,rgba(248,249,250,0.86),rgba(233,240,247,0.76))] backdrop-blur-md">
+      <header className="relative z-10 border-b border-[var(--color-border-card-subtle)] tp-header-surface backdrop-blur-md">
         <div className="max-w-[1240px] mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <LogoMark containerClassName="w-10 h-10 rounded-xl bg-[var(--color-brand-50)] border border-[var(--color-brand-100)] p-1" />
@@ -1514,55 +1495,49 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
               </p>
             </div>
           </div>
-          <Button onClick={onLogout} variant="secondary" size="md">
-            Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggleButton />
+            <Button onClick={onLogout} variant="secondary" size="md">
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="relative z-10 max-w-[1240px] mx-auto px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-[250px_1fr] gap-6">
           <aside className="lg:sticky lg:top-24 h-fit">
-            <Panel className="p-5 bg-[linear-gradient(145deg,#1b2a46,#233a5f_52%,#2e4b72_100%)] border-white/25 shadow-[0_18px_36px_rgba(27,38,59,0.3)] backdrop-blur-sm">
-              <p className="text-xs uppercase tracking-[0.14em] text-[rgba(236,241,246,0.74)] mb-2">Workspace</p>
-              <h2 className="text-[2rem] font-semibold leading-[1.08] text-white">
+            <Panel className="p-5 tp-card-surface border-[var(--color-border-card-subtle)] shadow-[var(--shadow-sm)] backdrop-blur-sm">
+              <p className="tp-eyebrow mb-2">Workspace</p>
+              <h2 className="text-[2rem] font-semibold leading-[1.08] text-[var(--color-text-primary)]">
                 Welcome back{firstName ? `, ${firstName}` : ''}.
               </h2>
-              <p className="text-[1.05rem] leading-relaxed text-[rgba(236,241,246,0.88)] mt-4">
+              <p className="text-[1.05rem] leading-relaxed text-[var(--color-text-secondary)] mt-4">
                 Monitor engagement, review student activity, and manage your class content in one place.
               </p>
 
-              <div className="mt-5 rounded-[1.75rem] border border-white/25 bg-white/12 p-2 flex flex-col gap-1.5">
+              <div className="mt-5 rounded-[1.75rem] border border-[var(--color-border-card-subtle)] bg-[var(--color-bg-muted)] p-2 flex flex-col gap-1.5">
                 <Button
                   onClick={() => setActiveTab('overview')}
-                  variant={activeTab === 'overview' ? 'secondary' : 'ghost'}
+                  variant="ghost"
                   size="md"
-                  className={activeTab === 'overview'
-                    ? 'bg-white text-[var(--color-primary-700)] border-white/90 shadow-[0_10px_20px_rgba(15,23,42,0.28)] justify-start'
-                    : 'justify-start font-medium text-white bg-[rgba(236,241,246,0.1)] border border-white/20 hover:bg-[rgba(236,241,246,0.18)] hover:text-[var(--color-primary-700)]'
-                  }
+                  className={activeTab === 'overview' ? 'tp-nav-btn-active border justify-start' : 'tp-nav-btn border justify-start'}
                 >
                   Overview
                 </Button>
                 <Button
                   onClick={() => setActiveTab('analytics')}
-                  variant={activeTab === 'analytics' ? 'secondary' : 'ghost'}
+                  variant="ghost"
                   size="md"
-                  className={activeTab === 'analytics'
-                    ? 'bg-white text-[var(--color-primary-700)] border-white/90 shadow-[0_10px_20px_rgba(15,23,42,0.28)] justify-start'
-                    : 'justify-start font-medium text-white bg-[rgba(236,241,246,0.1)] border border-white/20 hover:bg-[rgba(236,241,246,0.18)] hover:text-[var(--color-primary-700)]'
-                  }
+                  className={activeTab === 'analytics' ? 'tp-nav-btn-active border justify-start' : 'tp-nav-btn border justify-start'}
                 >
                   Analytics
                 </Button>
                 <Button
                   onClick={() => setActiveTab('classes')}
-                  variant={activeTab === 'classes' ? 'secondary' : 'ghost'}
+                  variant="ghost"
                   size="md"
-                  className={activeTab === 'classes'
-                    ? 'bg-white text-[var(--color-primary-700)] border-white/90 shadow-[0_10px_20px_rgba(15,23,42,0.28)] justify-start'
-                    : 'justify-start font-medium text-white bg-[rgba(236,241,246,0.1)] border border-white/20 hover:bg-[rgba(236,241,246,0.18)] hover:text-[var(--color-primary-700)]'
-                  }
+                  className={activeTab === 'classes' ? 'tp-nav-btn-active border justify-start' : 'tp-nav-btn border justify-start'}
                 >
                   Class Management
                 </Button>
@@ -1572,7 +1547,7 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
 
           <section className="space-y-6">
             {activeTab === 'analytics' ? (
-              <Panel className="p-5 md:p-6 bg-[linear-gradient(152deg,rgba(236,243,250,0.9),rgba(221,232,244,0.76))] border-[rgba(65,90,119,0.24)] backdrop-blur-sm">
+              <Panel className="p-5 md:p-6 tp-card-surface border-[var(--color-border-card-subtle)] backdrop-blur-sm">
                 <AnalyticsDashboard />
               </Panel>
             ) : activeTab === 'classes' ? (
@@ -1580,10 +1555,10 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
             ) : (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                  <DashboardStat label="Active Students" value={overviewStats.activeStudents} tone="blue" />
-                  <DashboardStat label="Modules" value={overviewStats.modules} tone="purple" />
-                  <DashboardStat label="Classes" value={overviewStats.classes} tone="amber" />
-                  <DashboardStat label="Insights" value={overviewStats.insights} tone="green" />
+                  <StatCard label="Active Students" value={overviewStats.activeStudents} tone="blue" />
+                  <StatCard label="Modules" value={overviewStats.modules} tone="purple" />
+                  <StatCard label="Classes" value={overviewStats.classes} tone="amber" />
+                  <StatCard label="Insights" value={overviewStats.insights} tone="green" />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">

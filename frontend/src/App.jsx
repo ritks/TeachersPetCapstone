@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-do
 import { APP_COPY } from './content/strings'
 import { useAuth } from './contexts/AuthContext'
 import { useStudent } from './contexts/StudentContext'
+import { ThemeProvider } from './contexts/ThemeContext'
 import EntryPage from './components/EntryPage'
 import ChatPanel, { WELCOME_MESSAGE } from './components/chat/ChatPanel'
 import LoadingSpinner from './components/common/LoadingSpinner'
@@ -12,6 +13,7 @@ import PdfViewerPanel from './components/student/PdfViewerPanel'
 import TeacherDashboard from './components/teacher/TeacherDashboard'
 import { Button } from './components/ui/primitives'
 import { apiUrl } from './lib/api'
+import ThemeToggleButton from './components/common/ThemeToggleButton'
 
 function loadStudentSessions(courseCode) {
   try {
@@ -71,6 +73,7 @@ export default function App() {
   }
 
   return (
+    <ThemeProvider currentUser={currentUser}>
     <Routes>
       <Route
         path="/"
@@ -110,6 +113,7 @@ export default function App() {
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </ThemeProvider>
   )
 }
 
@@ -170,9 +174,19 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
   const [sessionsLoading, setSessionsLoading] = useState(isAuthenticated)
   const [activeCitations, setActiveCitations] = useState([])
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
+  const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false)
   const teacherName = studentData.teacherName ?? null
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null
+
+  const closeMobileSessions = () => setMobileSessionsOpen(false)
+
+  const selectSession = (id) => {
+    setActiveSessionId(id)
+    setActiveCitations([])
+    setPdfViewerOpen(false)
+    closeMobileSessions()
+  }
 
   useEffect(() => {
     if (isAuthenticated) return
@@ -285,6 +299,7 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
     setActiveSessionId(session.id)
     setActiveCitations([])
     setPdfViewerOpen(false)
+    closeMobileSessions()
   }
 
   const handleSessionUpdate = (msgs, backendSid) => {
@@ -363,6 +378,7 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
     if (sessionId === activeSessionId) {
       setActiveCitations([])
       setPdfViewerOpen(false)
+      closeMobileSessions()
     }
   }
 
@@ -382,51 +398,68 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
     setActiveSessionId(fresh.id)
     setActiveCitations([])
     setPdfViewerOpen(false)
+    closeMobileSessions()
   }
 
   const handleCitationsChange = (citations) => {
     setActiveCitations(citations)
     const hasPdf = citations.some((c) => c.original_filename?.toLowerCase().endsWith('.pdf'))
-    if (hasPdf) setPdfViewerOpen(true)
+    if (hasPdf && !mobileSessionsOpen) setPdfViewerOpen(true)
   }
 
   return (
-    <div className="flex flex-row h-screen bg-[linear-gradient(145deg,rgba(248,249,250,0.96),rgba(227,236,247,0.82))]">
-      <StudentSidebar
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        onSelectSession={(id) => {
-          setActiveSessionId(id)
-          setActiveCitations([])
-          setPdfViewerOpen(false)
-        }}
-        onNewSession={handleNewSession}
-        onRenameSession={handleRenameSession}
-        onDeleteSession={handleDeleteSession}
-        onClearAllHistory={isAuthenticated ? handleClearAllHistory : null}
-        moduleName={studentData.moduleName}
-        teacherName={teacherName}
-      />
+    <div
+      className={`flex flex-col md:flex-row h-screen tp-card-surface-soft ${mobileSessionsOpen ? 'overflow-hidden' : 'overflow-y-auto'} md:overflow-hidden`}
+    >
+      <div className="hidden md:block">
+        <StudentSidebar
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSelectSession={(id) => selectSession(id)}
+          onNewSession={handleNewSession}
+          onRenameSession={handleRenameSession}
+          onDeleteSession={handleDeleteSession}
+          onClearAllHistory={isAuthenticated ? handleClearAllHistory : null}
+          moduleName={studentData.moduleName}
+          teacherName={teacherName}
+        />
+      </div>
       <div className="flex flex-col flex-1 min-w-0 bg-transparent">
-        <div className="flex items-center justify-between px-4 py-2 border-b border-[rgba(65,90,119,0.18)] bg-[rgba(248,249,250,0.82)] backdrop-blur-sm flex-shrink-0">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-sm flex-shrink-0">
           <div>
+            <Button
+              onClick={() => { setMobileSessionsOpen(true); setPdfViewerOpen(false) }}
+              variant="ghost"
+              size="icon"
+              className="md:hidden w-8 h-8 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-muted)]"
+              title="Sessions"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <line x1="4" y1="7" x2="20" y2="7" />
+                <line x1="4" y1="12" x2="20" y2="12" />
+                <line x1="4" y1="17" x2="20" y2="17" />
+              </svg>
+            </Button>
             {onBack && (
               <Button onClick={onBack} variant="secondary" size="sm">
                 Back to Dashboard
               </Button>
             )}
           </div>
-          <Button
-            onClick={onLogout}
-            variant="ghost"
-            size="md"
-            className="text-gray-400 hover:text-red-500 hover:bg-red-50"
-          >
-            {APP_COPY.leave}
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggleButton />
+            <Button
+              onClick={onLogout}
+              variant="ghost"
+              size="md"
+              className="text-gray-400 hover:text-red-500 hover:bg-red-50"
+            >
+              {APP_COPY.leave}
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-1 min-h-0">
-          <div className="flex flex-col flex-1 min-w-0">
+        <div className="flex flex-1 min-h-0 flex-col md:flex-row">
+          <div className="flex flex-col flex-1 min-w-0 min-h-0">
             {sessionsLoading ? (
               <LoadingSpinner />
             ) : activeSession && (
@@ -444,16 +477,62 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
             )}
           </div>
           {pdfViewerOpen && (
-            <div className="w-[45%] flex-shrink-0 min-w-[320px] max-w-[600px]">
-              <PdfViewerPanel
-                citations={activeCitations}
-                moduleId={studentData.moduleId}
-                onClose={() => setPdfViewerOpen(false)}
-              />
-            </div>
+            <>
+              {/* Desktop/tablet: side-by-side panel */}
+              <div className="hidden md:flex w-[45%] flex-shrink-0 min-w-[320px] max-w-[600px]">
+                <PdfViewerPanel
+                  citations={activeCitations}
+                  moduleId={studentData.moduleId}
+                  onClose={() => setPdfViewerOpen(false)}
+                />
+              </div>
+
+              {/* Mobile: modal overlay */}
+              <div className="fixed inset-0 z-50 md:hidden">
+                <div
+                  className="absolute inset-0 bg-black/30"
+                  onClick={() => setPdfViewerOpen(false)}
+                  role="button"
+                  tabIndex={-1}
+                />
+                <div className="relative h-full w-full bg-[var(--color-bg-canvas)]">
+                  <PdfViewerPanel
+                    citations={activeCitations}
+                    moduleId={studentData.moduleId}
+                    onClose={() => setPdfViewerOpen(false)}
+                  />
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>
+
+      {mobileSessionsOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div
+            className="absolute inset-0 bg-black/30"
+            role="button"
+            tabIndex={-1}
+            onClick={closeMobileSessions}
+          />
+          <div className="relative h-full w-full bg-[var(--color-bg-canvas)]">
+            <StudentSidebar
+              sessions={sessions}
+              activeSessionId={activeSessionId}
+              onSelectSession={(id) => selectSession(id)}
+              onNewSession={handleNewSession}
+              onRenameSession={handleRenameSession}
+              onDeleteSession={handleDeleteSession}
+              onClearAllHistory={isAuthenticated ? handleClearAllHistory : null}
+              moduleName={studentData.moduleName}
+              teacherName={teacherName}
+              mobileFullScreen
+              onClose={closeMobileSessions}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -6,6 +6,7 @@ import { Badge, Button, Card, Panel } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
 import { useStudent } from '../../contexts/StudentContext'
 import { apiUrl } from '../../lib/api'
+import ThemeToggleButton from '../common/ThemeToggleButton'
 
 function keyFor(classId, moduleId) {
   return `${classId}::${moduleId}`
@@ -212,7 +213,7 @@ export default function StudentDashboard({ currentUser, onLogout }) {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_84%_14%,rgba(65,90,119,0.34),rgba(65,90,119,0)_54%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(122deg,rgba(27,38,59,0.14),rgba(27,38,59,0.02)_42%,rgba(65,90,119,0.2)_100%)]" />
 
-      <header className="relative z-10 border-b border-[rgba(65,90,119,0.24)] bg-[linear-gradient(180deg,rgba(248,249,250,0.86),rgba(233,240,247,0.76))] backdrop-blur-md">
+      <header className="relative z-10 border-b border-[var(--color-border-card-subtle)] tp-header-surface backdrop-blur-md">
         <div className="max-w-[1240px] mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <LogoMark containerClassName="w-10 h-10 rounded-xl bg-[var(--color-brand-50)] border border-[var(--color-brand-100)] p-1" />
@@ -221,12 +222,15 @@ export default function StudentDashboard({ currentUser, onLogout }) {
               <p className="text-xs text-[var(--color-text-muted)]">{currentUser?.displayName || currentUser?.email}</p>
             </div>
           </div>
-          <Button onClick={onLogout} variant="secondary" size="md">Logout</Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggleButton />
+            <Button onClick={onLogout} variant="secondary" size="md">Logout</Button>
+          </div>
         </div>
       </header>
 
       <main className="relative z-10 max-w-[1240px] mx-auto px-6 py-8 space-y-5">
-        <Panel className="p-5 md:p-6 bg-[linear-gradient(152deg,rgba(236,243,250,0.9),rgba(221,232,244,0.76))] border-[rgba(65,90,119,0.24)] backdrop-blur-sm">
+        <Panel className="p-5 md:p-6 tp-card-surface border-[var(--color-border-card-subtle)] backdrop-blur-sm">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold text-[var(--color-text-primary)]">Your Learning Workspace</h2>
@@ -253,7 +257,7 @@ export default function StudentDashboard({ currentUser, onLogout }) {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {classCards.map((classCard) => (
-              <Card key={classCard.id} className="p-5 border-[rgba(65,90,119,0.24)] bg-[linear-gradient(150deg,rgba(236,241,246,0.92),rgba(223,232,242,0.78))]">
+              <Card key={classCard.id} className="p-5 border-[var(--color-border-card-subtle)] tp-card-surface">
                 {(() => {
                   const visibleModules = classCard.modules.filter((m) => m.moduleStatus !== 'archived')
                   const unlockedCount = visibleModules.filter((m) => m.unlocked).length
@@ -284,7 +288,7 @@ export default function StudentDashboard({ currentUser, onLogout }) {
                       Your instructor has not activated any modules yet.
                     </div>
                   ) : classCard.modules.filter((module) => module.moduleStatus !== 'archived').map((module) => (
-                    <div key={module.moduleId} className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 px-3 py-2.5 flex items-center justify-between gap-3">
+                    <div key={module.moduleId} className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 px-3 py-2.5 flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{module.moduleName}</p>
                         {module.moduleDescription && (

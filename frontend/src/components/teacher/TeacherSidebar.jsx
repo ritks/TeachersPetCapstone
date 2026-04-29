@@ -98,7 +98,7 @@ export default function TeacherSidebar({
 
   if (!open) {
     return (
-      <div className="flex flex-col items-center border-r border-gray-200 bg-white py-4 px-1">
+      <div className="flex flex-col items-center border-r border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] py-4 px-1">
         <Button
           onClick={onToggle}
           variant="subtle"
@@ -113,14 +113,14 @@ export default function TeacherSidebar({
   }
 
   return (
-    <aside className="w-64 flex-shrink-0 border-r border-gray-200 bg-white flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <span className="text-sm font-semibold text-gray-700">Modules</span>
+    <aside className="w-64 flex-shrink-0 border-r border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] flex flex-col">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-subtle)]">
+        <span className="text-sm font-semibold text-[var(--color-text-primary)]">Modules</span>
         <Button
           onClick={onToggle}
           variant="ghost"
           size="icon"
-          className="w-6 h-6 text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-xs"
+          className="w-6 h-6 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-muted)] text-xs"
           title="Close sidebar"
         >
           &#10005;
