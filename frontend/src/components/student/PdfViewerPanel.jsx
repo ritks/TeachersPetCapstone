@@ -8,7 +8,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString()
 
-export default function PdfViewerPanel({ citations, moduleId, onClose }) {
+export default function PdfViewerPanel({ citations, documents = [], documentsLoading = false, moduleId, onClose }) {
   const [numPages, setNumPages] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -28,9 +28,16 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
     [citations],
   )
 
-  const targetDocId = pdfCitations[0]?.document_id || null
+  const fallbackPdfDocument = useMemo(
+    () => (documents || []).find((doc) => (
+      doc.id && (doc.original_filename || doc.filename || '').toLowerCase().endsWith('.pdf')
+    )),
+    [documents],
+  )
+
+  const targetDocId = pdfCitations[0]?.document_id || fallbackPdfDocument?.id || null
   const targetPage = pdfCitations[0]?.page_start || 1
-  const activeFilename = pdfCitations[0]?.original_filename || ''
+  const activeFilename = pdfCitations[0]?.original_filename || fallbackPdfDocument?.original_filename || fallbackPdfDocument?.filename || ''
 
   // Derive the PDF URL — only changes when the target document changes
   const pdfUrl = useMemo(() => {
@@ -84,10 +91,10 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
     if (page >= 1 && page <= numPages) setCurrentPage(page)
   }
 
-  // If no PDF citations, show placeholder
+  // If no PDF is available, show placeholder
   if (!pdfUrl) {
     return (
-      <div className="flex flex-col h-full border-t md:border-t-0 md:border-l border-[var(--color-border-card-subtle)] bg-[var(--color-bg-canvas)]">
+      <div className="flex flex-col h-full w-full min-w-0 border-t md:border-t-0 md:border-l border-[var(--color-border-card-subtle)] bg-[var(--color-bg-canvas)]">
         <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-sm flex-shrink-0">
           <span className="text-sm font-semibold text-[var(--color-text-primary)]">Document Viewer</span>
           <button
@@ -102,7 +109,9 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
         </div>
         <div className="flex-1 flex items-center justify-center px-6 text-center">
           <p className="text-sm text-[var(--color-text-secondary)]">
-            No PDF references yet. Ask a question and relevant textbook pages will appear here.
+            {documentsLoading
+              ? 'Loading textbook...'
+              : 'No PDF textbook is available for this module yet.'}
           </p>
         </div>
       </div>
@@ -113,7 +122,7 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
   const citedPages = [...new Set(pdfCitations.map((c) => c.page_start).filter(Boolean))]
 
   return (
-    <div className="flex flex-col h-full border-t md:border-t-0 md:border-l border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)]">
+    <div className="flex flex-col h-full w-full min-w-0 border-t md:border-t-0 md:border-l border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)]">
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-sm flex-shrink-0">
         <div className="min-w-0 flex-1">
@@ -185,7 +194,7 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
       </div>
 
       {/* PDF content */}
-      <div ref={containerRef} className="flex-1 overflow-y-auto flex justify-center bg-[var(--color-bg-canvas)] p-4">
+      <div ref={containerRef} className="flex-1 overflow-y-auto flex justify-center bg-[var(--color-bg-canvas)] p-2">
         {error ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-sm text-[var(--color-danger-500)]">{error}</p>
@@ -208,7 +217,7 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
             {!loading && (
               <Page
                 pageNumber={currentPage}
-                width={containerWidth ? Math.min(containerWidth - 32, 800) : 600}
+                width={containerWidth ? Math.max(containerWidth - 16, 240) : 600}
                 renderTextLayer={false}
                 renderAnnotationLayer={false}
               />

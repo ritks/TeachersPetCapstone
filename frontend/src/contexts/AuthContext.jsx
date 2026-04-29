@@ -20,8 +20,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user)
       if (!user) {
+        setCurrentUser(null)
         setCurrentUserRole(null)
         setCurrentUserProfile(null)
         setAuthLoading(false)
@@ -30,9 +30,11 @@ export function AuthProvider({ children }) {
 
       try {
         const profile = await _saveUserDoc(user)
+        setCurrentUser(user)
         setCurrentUserProfile(profile)
         setCurrentUserRole(profile?.role || null)
       } catch {
+        setCurrentUser(user)
         setCurrentUserProfile(null)
         setCurrentUserRole(null)
       } finally {
@@ -69,13 +71,14 @@ export function AuthProvider({ children }) {
       email: user.email || existing?.email || '',
       displayName: user.displayName || existing?.displayName || '',
       role: role || null,
+      theme: existing?.theme || null,
     }
   }
 
   const login = async (email, password, roleHint = null) => {
     const cred = await signInWithEmailAndPassword(auth, email, password)
-    setCurrentUser(cred.user)
     const profile = await _saveUserDoc(cred.user, roleHint)
+    setCurrentUser(cred.user)
     setCurrentUserRole(profile?.role || null)
     setCurrentUserProfile(profile)
     return cred.user
@@ -86,8 +89,8 @@ export function AuthProvider({ children }) {
     if (displayName) {
       await updateProfile(cred.user, { displayName })
     }
-    setCurrentUser(cred.user)
     const profile = await _saveUserDoc({ ...cred.user, displayName }, roleHint)
+    setCurrentUser(cred.user)
     setCurrentUserRole(profile?.role || null)
     setCurrentUserProfile(profile)
     return cred.user
@@ -95,8 +98,8 @@ export function AuthProvider({ children }) {
 
   const loginWithGoogle = async (roleHint = null) => {
     const cred = await signInWithPopup(auth, googleProvider)
-    setCurrentUser(cred.user)
     const profile = await _saveUserDoc(cred.user, roleHint)
+    setCurrentUser(cred.user)
     setCurrentUserRole(profile?.role || null)
     setCurrentUserProfile(profile)
     return cred.user
