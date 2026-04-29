@@ -1,7 +1,19 @@
 import { useState, useRef } from 'react'
 import { Button, Input } from '../ui/primitives'
 
-export default function StudentSidebar({ sessions, activeSessionId, onSelectSession, onNewSession, onRenameSession, onDeleteSession, onClearAllHistory = null, moduleName, teacherName }) {
+export default function StudentSidebar({
+  sessions,
+  activeSessionId,
+  onSelectSession,
+  onNewSession,
+  onRenameSession,
+  onDeleteSession,
+  onClearAllHistory = null,
+  moduleName,
+  teacherName,
+  mobileFullScreen = false,
+  onClose = null,
+}) {
   const [editingId, setEditingId] = useState(null)
   const [editValue, setEditValue] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
@@ -25,7 +37,28 @@ export default function StudentSidebar({ sessions, activeSessionId, onSelectSess
   }
 
   return (
-    <aside className="relative w-72 flex-shrink-0 border-r border-[var(--color-border-card-subtle)] tp-card-surface-soft flex flex-col">
+    <aside
+      className={[
+        'relative w-full md:w-72 flex-shrink-0 border-[var(--color-border-card-subtle)] tp-card-surface-soft',
+        mobileFullScreen ? 'border-b-0 md:border-b-0 md:border-r' : 'border-b md:border-b-0 md:border-r',
+        mobileFullScreen ? 'h-full md:h-full' : 'h-[45vh] md:h-full',
+        'flex flex-col overflow-hidden min-h-0',
+      ].join(' ')}
+    >
+      {mobileFullScreen && onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-3 right-3 md:hidden rounded-md p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-muted)] transition-colors flex items-center justify-center"
+          aria-label="Close sessions"
+          title="Close"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      )}
       <div className="px-4 pt-4 pb-3 border-b border-[var(--color-border-card-subtle)]">
         <Button
           onClick={onNewSession}
@@ -112,7 +145,7 @@ export default function StudentSidebar({ sessions, activeSessionId, onSelectSess
       </div>
 
       {confirmDeleteId && (
-        <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-10 rounded-r-none" style={{ borderRadius: 0 }}>
+        <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-10 rounded-none md:rounded-r-none">
           <div className="bg-white rounded-xl shadow-lg mx-4 p-5 flex flex-col gap-4">
             <div>
               <p className="text-sm font-semibold text-gray-800">Delete this session?</p>

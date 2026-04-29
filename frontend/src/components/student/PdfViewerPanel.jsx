@@ -87,7 +87,7 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
   // If no PDF citations, show placeholder
   if (!pdfUrl) {
     return (
-      <div className="flex flex-col h-full border-l border-[var(--color-border-card-subtle)] bg-[var(--color-bg-canvas)]">
+      <div className="flex flex-col h-full border-t md:border-t-0 md:border-l border-[var(--color-border-card-subtle)] bg-[var(--color-bg-canvas)]">
         <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-sm flex-shrink-0">
           <span className="text-sm font-semibold text-[var(--color-text-primary)]">Document Viewer</span>
           <button
@@ -113,7 +113,7 @@ export default function PdfViewerPanel({ citations, moduleId, onClose }) {
   const citedPages = [...new Set(pdfCitations.map((c) => c.page_start).filter(Boolean))]
 
   return (
-    <div className="flex flex-col h-full border-l border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)]">
+    <div className="flex flex-col h-full border-t md:border-t-0 md:border-l border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)]">
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-sm flex-shrink-0">
         <div className="min-w-0 flex-1">
