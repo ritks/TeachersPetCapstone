@@ -44,16 +44,16 @@ export default function StudentEntryPage({ onSuccess, embedded = false }) {
       {!embedded && (
         <div className="text-center mb-8">
           <LogoMark containerClassName="w-14 h-14 rounded-full border border-white/60 mx-auto mb-3 shadow-lg p-1 bg-gradient-to-br from-blue-500 to-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">{STUDENT_ENTRY_COPY.title}</h2>
-          <p className="text-gray-500 text-sm mt-1">{STUDENT_ENTRY_COPY.subtitle}</p>
+          <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">{STUDENT_ENTRY_COPY.title}</h2>
+          <p className="text-[var(--color-text-secondary)] text-sm mt-1">{STUDENT_ENTRY_COPY.subtitle}</p>
         </div>
       )}
 
-      <Panel className={embedded ? 'p-5 bg-white/92 backdrop-blur-sm border-indigo-100 shadow-[0_14px_32px_rgba(27,38,59,0.12)]' : 'p-6'}>
+      <Panel className={embedded ? 'p-5 bg-white/92 backdrop-blur-sm border-indigo-100 shadow-[var(--shadow-lg)]' : 'p-6'}>
         {embedded && (
           <div className="mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">{STUDENT_ENTRY_COPY.title}</h3>
-            <p className="text-sm text-gray-500 mt-1">{STUDENT_ENTRY_COPY.subtitle}</p>
+            <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">{STUDENT_ENTRY_COPY.title}</h3>
+            <p className="text-sm text-[var(--color-text-secondary)] mt-1">{STUDENT_ENTRY_COPY.subtitle}</p>
           </div>
         )}
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">

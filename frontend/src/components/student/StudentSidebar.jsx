@@ -25,13 +25,13 @@ export default function StudentSidebar({ sessions, activeSessionId, onSelectSess
   }
 
   return (
-    <aside className="relative w-72 flex-shrink-0 border-r border-[rgba(65,90,119,0.18)] bg-[linear-gradient(180deg,rgba(248,249,250,0.97),rgba(237,243,250,0.92))] flex flex-col">
-      <div className="px-4 pt-4 pb-3 border-b border-[rgba(65,90,119,0.14)]">
+    <aside className="relative w-72 flex-shrink-0 border-r border-[var(--color-border-card-subtle)] tp-card-surface-soft flex flex-col">
+      <div className="px-4 pt-4 pb-3 border-b border-[var(--color-border-card-subtle)]">
         <Button
           onClick={onNewSession}
           variant="secondary"
           size="md"
-          className="w-full flex items-center gap-2 justify-start bg-white/85 border-[rgba(65,90,119,0.2)] shadow-sm"
+          className="w-full flex items-center gap-2 justify-start bg-white/85 border-[var(--color-border-card-subtle)] shadow-sm"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-[var(--color-secondary-600)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -61,8 +61,8 @@ export default function StudentSidebar({ sessions, activeSessionId, onSelectSess
               className={[
                 'group flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-colors cursor-pointer border',
                 activeSessionId === session.id
-                  ? 'bg-[rgba(79,70,229,0.14)] text-[var(--color-primary-700)] border-[rgba(79,70,229,0.24)] shadow-sm'
-                  : 'text-[var(--color-text-secondary)] border-transparent hover:bg-white/80 hover:border-[rgba(65,90,119,0.2)]',
+                  ? 'bg-[var(--color-brand-50)] text-[var(--color-text-primary)] border-[var(--color-brand-500)] shadow-sm'
+                  : 'text-[var(--color-text-secondary)] border-transparent hover:bg-white/80 hover:border-[var(--color-border-card-subtle)]',
               ].join(' ')}
               onClick={() => editingId !== session.id && onSelectSession(session.id)}
             >
@@ -140,7 +140,7 @@ export default function StudentSidebar({ sessions, activeSessionId, onSelectSess
         </div>
       )}
 
-      <div className="border-t border-[rgba(65,90,119,0.14)] px-4 py-3 flex flex-col gap-2.5 bg-white/45">
+      <div className="border-t border-[var(--color-border-card-subtle)] px-4 py-3 flex flex-col gap-2.5 bg-white/45">
         <div className="min-w-0">
           <p className="text-[0.64rem] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.12em] mb-0.5">
             Module

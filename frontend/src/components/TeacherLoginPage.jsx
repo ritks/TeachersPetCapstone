@@ -58,7 +58,7 @@ export default function TeacherLoginPage({ onSuccess, embedded = false }) {
         </div>
       )}
 
-      <Panel className={embedded ? 'p-5 bg-white/92 backdrop-blur-sm border-indigo-100 shadow-[0_14px_32px_rgba(27,38,59,0.12)]' : 'p-6'}>
+      <Panel className={embedded ? 'p-5 bg-white/92 backdrop-blur-sm border-indigo-100 shadow-[var(--shadow-lg)]' : 'p-6'}>
           {embedded && (
             <div className="mb-4">
               <h3 className="text-lg font-semibold text-gray-800">{TEACHER_LOGIN_COPY.title}</h3>

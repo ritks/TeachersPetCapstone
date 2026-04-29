@@ -3,6 +3,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { apiUrl } from '../lib/api'
+import { Badge, StatCard } from './ui/primitives'
 
 function fmtTime(ts) {
   if (!ts) return '—'
@@ -292,16 +293,16 @@ export default function AnalyticsDashboard() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-[rgba(65,90,119,0.22)] bg-[linear-gradient(148deg,rgba(236,243,250,0.94),rgba(222,233,245,0.78))] p-5 md:p-6">
+      <section className="rounded-2xl border border-[var(--color-border-card)] tp-card-surface p-5 md:p-6">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
           <div>
-            <p className="text-[0.72rem] uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Analytics Workspace</p>
+            <p className="tp-eyebrow">Analytics Workspace</p>
             <h3 className="text-2xl md:text-[1.9rem] font-semibold text-[var(--color-text-primary)] mt-1">Student Conversation Insights</h3>
             <p className="text-sm text-[var(--color-text-secondary)] mt-1.5">
               Track engagement, identify support patterns, and review classroom chat quality at a glance.
             </p>
           </div>
-          <div className="rounded-lg border border-[rgba(65,90,119,0.2)] bg-white/70 px-3 py-2 text-xs text-[var(--color-text-secondary)]">
+          <div className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 px-3 py-2 text-xs text-[var(--color-text-secondary)]">
             Last updated: {fmtTime(analytics.lastUpdated)}
           </div>
         </div>
@@ -315,15 +316,15 @@ export default function AnalyticsDashboard() {
       </section>
 
       {error && (
-        <div className="rounded-lg border border-[rgba(220,38,38,0.25)] bg-[rgba(254,242,242,0.8)] px-4 py-3 text-sm text-[var(--color-danger-600)]">
+        <div className="rounded-lg border border-[var(--color-danger-500)] bg-[var(--color-danger-50)] px-4 py-3 text-sm text-[var(--color-danger-600)]">
           Failed to load analytics: {error}
         </div>
       )}
 
-      <section className="rounded-xl border border-[rgba(65,90,119,0.2)] bg-[linear-gradient(150deg,rgba(248,249,250,0.94),rgba(234,241,248,0.82))] p-4">
+      <section className="rounded-xl border border-[var(--color-border-card-subtle)] tp-card-surface-soft p-4">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
           <div>
-            <p className="text-[0.72rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">AI Summary</p>
+            <p className="tp-eyebrow">AI Summary</p>
             <h4 className="text-lg font-semibold text-[var(--color-text-primary)] mt-1">Classroom Trend Snapshot</h4>
             <p className="text-sm text-[var(--color-text-secondary)] mt-1">
               Generate a quick AI summary from the currently filtered chat logs.
@@ -333,20 +334,20 @@ export default function AnalyticsDashboard() {
             type="button"
             disabled={summaryLoading}
             onClick={handleGenerateSummary}
-            className="inline-flex items-center justify-center rounded-lg border border-[rgba(65,90,119,0.24)] bg-white px-3 py-2 text-sm font-medium text-[var(--color-text-primary)] hover:bg-[rgba(236,241,246,0.78)] disabled:opacity-60"
+            className="inline-flex items-center justify-center rounded-lg border border-[var(--color-border-card-subtle)] bg-white px-3 py-2 text-sm font-medium text-[var(--color-text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-60"
           >
             {summaryLoading ? 'Generating...' : (aiSummary ? 'Refresh Summary' : 'Generate Summary')}
           </button>
         </div>
 
         {summaryError && (
-          <div className="mt-3 rounded-lg border border-[rgba(220,38,38,0.25)] bg-[rgba(254,242,242,0.8)] px-3 py-2 text-sm text-[var(--color-danger-600)]">
+          <div className="mt-3 rounded-lg border border-[var(--color-danger-500)] bg-[var(--color-danger-50)] px-3 py-2 text-sm text-[var(--color-danger-600)]">
             {summaryError}
           </div>
         )}
 
         {aiSummary ? (
-          <div className="mt-3 rounded-lg border border-[rgba(65,90,119,0.16)] bg-white/75 p-3">
+          <div className="mt-3 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/75 p-3">
             <pre className="whitespace-pre-wrap text-sm text-[var(--color-text-secondary)] font-sans leading-6">{aiSummary}</pre>
             {summaryMeta && (
               <p className="mt-2 text-xs text-[var(--color-text-muted)]">
@@ -363,12 +364,12 @@ export default function AnalyticsDashboard() {
 
       <section className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_290px] gap-4">
         <div className="space-y-3">
-          <div className="sticky top-0 z-10 rounded-xl border border-[rgba(65,90,119,0.2)] bg-[rgba(248,249,250,0.86)] backdrop-blur-md p-3">
+          <div className="sticky top-0 z-10 rounded-xl border border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-md p-3">
             <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_220px_220px] gap-2.5">
               <select
                 value={filterModule}
                 onChange={(e) => setFilterModule(e.target.value)}
-                className="rounded-lg border border-[rgba(65,90,119,0.24)] bg-white px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[rgba(65,90,119,0.36)]"
+                className="tp-input"
               >
                 <option value="all">All modules</option>
                 {moduleOptions.map(([id, name]) => (
@@ -379,7 +380,7 @@ export default function AnalyticsDashboard() {
               <select
                 value={filterRange}
                 onChange={(e) => setFilterRange(e.target.value)}
-                className="rounded-lg border border-[rgba(65,90,119,0.24)] bg-white px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[rgba(65,90,119,0.36)]"
+                className="tp-input"
               >
                 <option value="all">All time</option>
                 <option value="30d">Last 30 days</option>
@@ -389,7 +390,7 @@ export default function AnalyticsDashboard() {
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
-                className="rounded-lg border border-[rgba(65,90,119,0.24)] bg-white px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[rgba(65,90,119,0.36)]"
+                className="tp-input"
               >
                 <option value="all">All categories</option>
                 {categoryOptions.map(([id, label]) => (
@@ -401,13 +402,13 @@ export default function AnalyticsDashboard() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search prompt, response, module, code…"
-                className="rounded-lg border border-[rgba(65,90,119,0.24)] bg-white px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[rgba(65,90,119,0.36)]"
+                className="tp-input"
               />
             </div>
           </div>
 
-          <div className="rounded-xl border border-[rgba(65,90,119,0.2)] bg-white/75 overflow-hidden">
-            <div className="px-4 py-3 border-b border-[rgba(65,90,119,0.14)] flex items-center justify-between gap-2">
+          <div className="rounded-xl border border-[var(--color-border-card-subtle)] bg-white/75 overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--color-border-card-subtle)] flex items-center justify-between gap-2">
               <h4 className="text-sm font-semibold text-[var(--color-text-primary)]">Student Chat Logs</h4>
               <span className="text-xs text-[var(--color-text-muted)]">{tableRows.length} results</span>
             </div>
@@ -421,7 +422,7 @@ export default function AnalyticsDashboard() {
             ) : (
               <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
                 <table className="w-full min-w-[980px] text-xs">
-                  <thead className="sticky top-0 bg-[rgba(236,241,246,0.95)] backdrop-blur-sm border-b border-[rgba(65,90,119,0.16)]">
+                  <thead className="sticky top-0 bg-[var(--bg-frosted-muted)] backdrop-blur-sm border-b border-[var(--color-border-card-subtle)]">
                     <tr>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-36">Time</th>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-28">Code</th>
@@ -436,7 +437,7 @@ export default function AnalyticsDashboard() {
                     {tableRows.map((row, idx) => {
                       const isExpanded = Boolean(expandedRows[row.id])
                       return (
-                        <tr key={row.id} className={idx % 2 === 0 ? 'bg-white/75 hover:bg-[rgba(236,241,246,0.74)]' : 'bg-[rgba(248,249,250,0.78)] hover:bg-[rgba(236,241,246,0.74)]'}>
+                        <tr key={row.id} className={idx % 2 === 0 ? 'bg-white/75 hover:bg-[var(--bg-hover)]' : 'bg-[var(--color-bg-muted)] hover:bg-[var(--bg-hover)]'}>
                           <td className="px-3 py-2.5 text-[var(--color-text-muted)] whitespace-nowrap">{fmtTime(row.timestamp)}</td>
                           <td className="px-3 py-2.5 text-[var(--color-text-secondary)] font-mono whitespace-nowrap">{row.courseCode || '—'}</td>
                           <td className="px-3 py-2.5 text-[var(--color-text-secondary)] whitespace-nowrap">{row.moduleName || (row.moduleId ? `${row.moduleId.slice(0, 8)}…` : '—')}</td>
@@ -507,27 +508,10 @@ export default function AnalyticsDashboard() {
   )
 }
 
-function StatCard({ label, value, tone = 'blue' }) {
-  const tones = {
-    blue: 'from-[rgba(65,90,119,0.28)] to-[rgba(65,90,119,0.12)] text-[var(--color-primary-700)]',
-    purple: 'from-[rgba(91,83,214,0.26)] to-[rgba(65,90,119,0.12)] text-[var(--color-primary-700)]',
-    green: 'from-[rgba(45,106,79,0.24)] to-[rgba(65,90,119,0.1)] text-[var(--color-primary-700)]',
-    amber: 'from-[rgba(186,147,74,0.24)] to-[rgba(65,90,119,0.1)] text-[var(--color-primary-700)]',
-  }
-  return (
-    <div className="rounded-xl border border-[rgba(65,90,119,0.2)] bg-[linear-gradient(150deg,rgba(248,249,250,0.94),rgba(234,241,248,0.8))] p-4 flex items-center gap-3">
-      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${tones[tone]} flex items-center justify-center font-semibold text-lg`}>
-        {value}
-      </div>
-      <p className="text-sm font-medium text-[var(--color-text-secondary)]">{label}</p>
-    </div>
-  )
-}
-
 function InsightCard({ title, value, sub }) {
   return (
-    <div className="rounded-xl border border-[rgba(65,90,119,0.2)] bg-[linear-gradient(152deg,rgba(248,249,250,0.92),rgba(233,240,247,0.8))] p-4">
-      <p className="text-[0.68rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">{title}</p>
+    <div className="rounded-xl border border-[var(--color-border-card-subtle)] tp-card-surface-soft p-4">
+      <p className="tp-eyebrow">{title}</p>
       <p className="text-base font-semibold text-[var(--color-text-primary)] mt-2 break-words">{value}</p>
       <p className="text-xs text-[var(--color-text-secondary)] mt-1.5">{sub}</p>
     </div>
@@ -535,33 +519,10 @@ function InsightCard({ title, value, sub }) {
 }
 
 function CategoryBadge({ label, flagged }) {
-  return (
-    <span
-      className={
-        flagged
-          ? 'inline-flex items-center rounded-full border border-[rgba(186,147,74,0.28)] bg-[rgba(255,251,235,0.92)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-warning-700)]'
-          : 'inline-flex items-center rounded-full border border-[rgba(45,106,79,0.22)] bg-[rgba(240,253,244,0.9)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-success-700)]'
-      }
-    >
-      {label}
-    </span>
-  )
+  return <Badge tone={flagged ? 'warning' : 'success'}>{label}</Badge>
 }
 
 function StatusBadge({ status, severity = 'low' }) {
-  const isReview = status === 'Needs Review'
-  const isHigh = severity === 'high'
-  const reviewTone = isHigh
-    ? 'inline-flex items-center rounded-full border border-[rgba(220,38,38,0.25)] bg-[rgba(254,242,242,0.9)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-danger-600)]'
-    : 'inline-flex items-center rounded-full border border-[rgba(186,147,74,0.28)] bg-[rgba(255,251,235,0.92)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-warning-700)]'
-
-  return (
-    <span className={isReview
-      ? reviewTone
-      : 'inline-flex items-center rounded-full border border-[rgba(45,106,79,0.25)] bg-[rgba(240,253,244,0.9)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-success-700)]'
-    }
-    >
-      {status}
-    </span>
-  )
+  if (status !== 'Needs Review') return <Badge tone="success">{status}</Badge>
+  return <Badge tone={severity === 'high' ? 'danger' : 'warning'}>{status}</Badge>
 }

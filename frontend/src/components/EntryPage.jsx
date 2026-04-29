@@ -249,7 +249,7 @@ function HeroCollage() {
   return (
     <div className="relative mt-10 lg:mt-12 min-h-[200px] sm:min-h-[220px] w-full max-w-[560px]">
       <div
-        className="absolute -left-4 top-6 h-32 w-40 rotate-[-8deg] rounded-[2rem] bg-gradient-to-br from-emerald-400/90 to-teal-600/85 opacity-95 shadow-[0_20px_50px_rgba(0,0,0,0.25)]"
+        className="absolute -left-4 top-6 h-32 w-40 rotate-[-8deg] rounded-[2rem] bg-gradient-to-br from-emerald-400/90 to-teal-600/85 opacity-95 shadow-[var(--shadow-xl)]"
         aria-hidden
       >
         <svg className="h-full w-full p-3 text-white/35" viewBox="0 0 100 100" fill="none">
@@ -269,17 +269,17 @@ function HeroCollage() {
         </svg>
       </div>
       <div
-        className="absolute left-[18%] top-0 z-10 h-[88px] w-[88px] overflow-hidden rounded-full border-4 border-white/90 shadow-[0_12px_30px_rgba(0,0,0,0.28)] sm:h-[100px] sm:w-[100px]"
+        className="absolute left-[18%] top-0 z-10 h-[88px] w-[88px] overflow-hidden rounded-full border-4 border-white/90 shadow-[var(--shadow-lg)] sm:h-[100px] sm:w-[100px]"
       >
         <img src={studentPfpIcon} alt="" className="h-full w-full object-contain bg-white" />
       </div>
       <div
-        className="absolute left-[42%] top-8 z-20 h-[100px] w-[100px] overflow-hidden rounded-[1.35rem] border-4 border-amber-200/90 shadow-[0_16px_36px_rgba(0,0,0,0.26)] rotate-[6deg] sm:h-[112px] sm:w-[112px]"
+        className="absolute left-[42%] top-8 z-20 h-[100px] w-[100px] overflow-hidden rounded-[1.35rem] border-4 border-amber-200/90 shadow-[var(--shadow-lg)] rotate-[6deg] sm:h-[112px] sm:w-[112px]"
       >
         <img src={teacherPfpIcon} alt="" className="h-full w-full object-contain bg-white p-1" />
       </div>
       <div
-        className="absolute right-[4%] top-2 z-10 h-[80px] w-[80px] overflow-hidden rounded-full border-4 border-cyan-200/80 shadow-[0_12px_28px_rgba(0,0,0,0.22)] sm:h-[92px] sm:w-[92px]"
+        className="absolute right-[4%] top-2 z-10 h-[80px] w-[80px] overflow-hidden rounded-full border-4 border-cyan-200/80 shadow-[var(--shadow-lg)] sm:h-[92px] sm:w-[92px]"
       >
         <img src={studentPfpIcon} alt="" className="h-full w-full object-contain scale-110 bg-sky-50" />
       </div>
@@ -333,7 +333,7 @@ export default function EntryPage({ onStudentEntry, onTeacherEntry }) {
               <LogoMark
                 src={logoMarkSrc}
                 alt={ENTRY_COPY.visualAlt}
-                containerClassName="h-20 w-20 sm:h-24 sm:w-24 flex-shrink-0 rounded-[1.4rem] bg-white p-0.5 shadow-[0_18px_40px_rgba(0,0,0,0.3)] ring-2 ring-white/35"
+                containerClassName="h-20 w-20 sm:h-24 sm:w-24 flex-shrink-0 rounded-[1.4rem] bg-white p-0.5 shadow-[var(--shadow-xl)] ring-2 ring-white/35"
                 imgClassName="rounded-2xl scale-[1.02]"
               />
               <span className="text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
@@ -344,7 +344,7 @@ export default function EntryPage({ onStudentEntry, onTeacherEntry }) {
 
             <p
               className="text-[1.65rem] font-medium leading-tight text-white sm:text-3xl lg:text-[2.15rem] lg:leading-[1.15]"
-              style={{ fontFamily: '\"Fraunces\", ui-serif, Georgia, serif' }}
+              style={{ fontFamily: '"Fraunces", ui-serif, Georgia, serif' }}
             >
               {APP_COPY.appTagline}
             </p>
@@ -361,7 +361,7 @@ export default function EntryPage({ onStudentEntry, onTeacherEntry }) {
           <LightColumnPatterns />
 
           <div className="relative z-10 mx-auto w-full max-w-2xl lg:mx-0 lg:mr-auto lg:-translate-x-6">
-            <div className="min-h-[380px] sm:min-h-[440px] rounded-[2rem] border border-white/18 bg-white/95 p-7 shadow-[0_26px_70px_rgba(0,0,0,0.35)] backdrop-blur-md sm:p-9 flex flex-col">
+            <div className="min-h-[380px] sm:min-h-[440px] rounded-[2rem] border border-white/18 bg-white/95 p-7 shadow-[var(--shadow-xl)] backdrop-blur-md sm:p-9 flex flex-col">
               <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.65rem]">
                 {ENTRY_COPY.heroTitle}
               </h1>

@@ -65,7 +65,7 @@ export function Button({
   ...props
 }) {
   const variants = {
-    primary: 'bg-[var(--color-brand-600)] text-white border border-[var(--color-brand-600)] hover:bg-[var(--color-brand-700)]',
+    primary: 'tp-btn-primary border',
     secondary: 'bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-muted)]',
     ghost: 'bg-transparent text-[var(--color-text-secondary)] border border-transparent hover:bg-[var(--color-bg-muted)]',
     subtle: 'bg-[var(--color-bg-muted)] text-[var(--color-text-secondary)] border border-transparent hover:bg-[var(--color-border-subtle)]',
@@ -91,6 +91,23 @@ export function Button({
     >
       {children}
     </button>
+  )
+}
+
+export function StatCard({ label, value, tone = 'blue' }) {
+  const tones = {
+    blue: 'from-[rgba(65,90,119,0.28)] to-[rgba(65,90,119,0.12)] text-[var(--color-text-primary)]',
+    purple: 'from-[rgba(91,83,214,0.26)] to-[rgba(65,90,119,0.12)] text-[var(--color-text-primary)]',
+    green: 'from-[rgba(45,106,79,0.24)] to-[rgba(65,90,119,0.1)] text-[var(--color-text-primary)]',
+    amber: 'from-[rgba(186,147,74,0.24)] to-[rgba(65,90,119,0.1)] text-[var(--color-text-primary)]',
+  }
+  return (
+    <div className="rounded-xl border border-[var(--color-border-card-subtle)] tp-card-surface-soft p-4 flex items-center gap-3">
+      <div className={cx('w-11 h-11 rounded-xl bg-gradient-to-br flex items-center justify-center font-semibold text-lg', tones[tone])}>
+        {value}
+      </div>
+      <p className="text-sm font-medium text-[var(--color-text-secondary)]">{label}</p>
+    </div>
   )
 }
 
