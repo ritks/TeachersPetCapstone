@@ -59,7 +59,7 @@ function StudentRoute({ currentUser, currentUserRole, studentData, authLoading, 
 
 
 export default function App() {
-  const { currentUser, currentUserRole, authLoading, logout } = useAuth()
+  const { currentUser, currentUserRole, currentUserProfile, authLoading, logout } = useAuth()
   const { studentData, clearStudent } = useStudent()
   const navigate = useNavigate()
 
@@ -73,7 +73,12 @@ export default function App() {
   }
 
   return (
-    <ThemeProvider currentUser={currentUser}>
+    <ThemeProvider
+      currentUser={currentUser}
+      currentUserProfile={currentUserProfile}
+      authLoading={authLoading}
+      allowGuestTheme={Boolean(studentData)}
+    >
     <Routes>
       <Route
         path="/"
@@ -173,6 +178,8 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
   const [activeSessionId, setActiveSessionId] = useState('')
   const [sessionsLoading, setSessionsLoading] = useState(isAuthenticated)
   const [activeCitations, setActiveCitations] = useState([])
+  const [moduleDocuments, setModuleDocuments] = useState([])
+  const [documentsLoading, setDocumentsLoading] = useState(false)
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
   const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false)
   const teacherName = studentData.teacherName ?? null
@@ -201,6 +208,28 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
     setSessions([first])
     setActiveSessionId(first.id)
   }, [isAuthenticated, storageKey])
+
+  useEffect(() => {
+    if (!studentData.moduleId) return
+    let cancelled = false
+
+    const loadModuleDocuments = async () => {
+      setDocumentsLoading(true)
+      try {
+        const res = await fetch(apiUrl(`/modules/${studentData.moduleId}/documents`))
+        const data = await res.json()
+        if (!res.ok) throw new Error(data?.detail || 'Failed to load documents')
+        if (!cancelled) setModuleDocuments(Array.isArray(data) ? data : [])
+      } catch {
+        if (!cancelled) setModuleDocuments([])
+      } finally {
+        if (!cancelled) setDocumentsLoading(false)
+      }
+    }
+
+    loadModuleDocuments()
+    return () => { cancelled = true }
+  }, [studentData.moduleId])
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -447,6 +476,18 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setPdfViewerOpen((prev) => !prev)}
+              variant="ghost"
+              size="md"
+              className={[
+                'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-muted)]',
+                pdfViewerOpen ? 'bg-[var(--color-bg-muted)] text-[var(--color-text-primary)]' : '',
+              ].join(' ')}
+              title={pdfViewerOpen ? 'Hide textbook' : 'Show textbook'}
+            >
+              Textbook
+            </Button>
             <ThemeToggleButton />
             <Button
               onClick={onLogout}
@@ -459,7 +500,7 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
           </div>
         </div>
         <div className="flex flex-1 min-h-0 flex-col md:flex-row">
-          <div className="flex flex-col flex-1 min-w-0 min-h-0">
+          <div className={`flex flex-col min-w-0 min-h-0 ${pdfViewerOpen ? 'md:flex-1' : 'flex-1'}`}>
             {sessionsLoading ? (
               <LoadingSpinner />
             ) : activeSession && (
@@ -479,9 +520,11 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
           {pdfViewerOpen && (
             <>
               {/* Desktop/tablet: side-by-side panel */}
-              <div className="hidden md:flex w-[45%] flex-shrink-0 min-w-[320px] max-w-[600px]">
+              <div className="hidden md:flex md:flex-1 min-w-0">
                 <PdfViewerPanel
                   citations={activeCitations}
+                  documents={moduleDocuments}
+                  documentsLoading={documentsLoading}
                   moduleId={studentData.moduleId}
                   onClose={() => setPdfViewerOpen(false)}
                 />
@@ -498,6 +541,8 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
                 <div className="relative h-full w-full bg-[var(--color-bg-canvas)]">
                   <PdfViewerPanel
                     citations={activeCitations}
+                    documents={moduleDocuments}
+                    documentsLoading={documentsLoading}
                     moduleId={studentData.moduleId}
                     onClose={() => setPdfViewerOpen(false)}
                   />
