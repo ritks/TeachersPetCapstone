@@ -242,6 +242,36 @@ Open http://localhost:5173.
 
 ## Testing
 
+### Firebase Admin Key for Local Backend
+
+The local backend needs a Firebase Admin service account key so it can verify authenticated users.
+
+1. Go to the Firebase Console:
+   https://console.firebase.google.com/
+
+2. Open the project used by this app:
+   `teacherspet-eff85`
+
+3. In the left sidebar, click the gear icon next to **Project Overview**, then open **Project settings**.
+
+4. Go to the **Service accounts** tab.
+
+5. Under **Firebase Admin SDK**, click **Generate new private key**.
+
+6. Download the JSON file.
+
+7. Move the downloaded JSON file to this exact path on your computer:
+
+   ```bash
+   /Users/YOUR_USERNAME/Desktop/teacherspet-eff85-firebase-adminsdk-fbsvc-ebd2d5a57b.json
+
+8. Update backend/.env so GOOGLE_APPLICATION_CREDENTIALS points to that file:
+GOOGLE_APPLICATION_CREDENTIALS=/Users/YOUR_USERNAME/Desktop/teacherspet-eff85-firebase-adminsdk-fbsvc-ebd2d5a57b.json
+
+9. Restart the backend server after adding or moving the file.
+
+If this is not set up correctly, authenticated local requests like /chat and /sessions may return 401 Unauthorized.
+
 The project includes comprehensive testing at multiple levels:
 
 | Type | Framework | Location | Command |
