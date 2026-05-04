@@ -374,7 +374,9 @@ def _verify_firebase_token(id_token: str) -> str:
     if not firebase_admin or not firebase_auth:
         raise HTTPException(status_code=503, detail="Authentication service unavailable")
     try:
+        t0 = time.perf_counter()
         decoded = firebase_auth.verify_id_token(id_token)
+        print(f"[PERF] Firebase verify_id_token: {time.perf_counter() - t0:.2f}s")
         uid = decoded.get("uid")
         if not uid:
             raise HTTPException(status_code=401, detail="Invalid authentication token")
@@ -563,12 +565,14 @@ async def chat(
             if not module:
                 raise HTTPException(status_code=404, detail="Module not found")
 
+            t_rag_start = time.perf_counter()
             rag_context, citations_raw = retriever.build_context(
                 query=question,
                 module_id=module.id,
                 module_name=module.name,
                 module_description=module.description,
             )
+            print(f"[PERF] RAG retrieval (embed+query): {time.perf_counter() - t_rag_start:.2f}s")
             if rag_context:
                 system_prompt = f"{system_prompt}\n\n{rag_context}"
 
@@ -603,12 +607,25 @@ async def chat(
             types.Content(role="user", parts=[types.Part(text=question)])
         )
 
+        t_gemini_start = time.perf_counter()
         answer = _generate_chat_response(contents, system_prompt)
+        t_gemini_end = time.perf_counter()
+        history_turns = len(contents) - 1
+        system_chars = len(system_prompt)
+        print(f"[PERF] Gemini chat call: {t_gemini_end - t_gemini_start:.2f}s | history_turns={history_turns} | system_prompt_chars={system_chars}")
+
+        # ---- Comparison: same prompt but no history ----
+        contents_no_history = [types.Content(role="user", parts=[types.Part(text=question)])]
+        t_no_hist_start = time.perf_counter()
+        _generate_chat_response(contents_no_history, system_prompt)
+        print(f"[PERF] Gemini (no history): {time.perf_counter() - t_no_hist_start:.2f}s")
 
         # ---- Validation with GitHub models (required) ----
         validation_result = None
         try:
+            t_val_start = time.perf_counter()
             validation_result = validator.validate(question, answer)
+            print(f"[PERF] Validator call: {time.perf_counter() - t_val_start:.2f}s")
             # If unsafe, reject the response
             if not validation_result["is_safe"]:
                 print(f"[WARN] Response flagged as unsafe. Votes: {validation_result['safety_votes']}")
