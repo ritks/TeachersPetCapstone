@@ -566,6 +566,28 @@ function ClassManagementPanel({ currentUser }) {
     setAddingStudentForClass(classId)
     setErrorMessage('')
     try {
+      const idToken = await currentUser.getIdToken()
+      const lookupRes = await fetch(apiUrl('/students/lookup'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ email: raw }),
+      })
+      const lookup = await lookupRes.json().catch(() => ({}))
+      if (!lookupRes.ok) {
+        throw new Error(lookup?.detail || 'Could not verify that student account.')
+      }
+      if (!lookup.exists) {
+        setErrorMessage('No student account exists for that email. Ask the student to create an account first.')
+        return
+      }
+      if (!lookup.is_student || !lookup.uid) {
+        setErrorMessage(lookup.message || 'That email belongs to an account, but not a student account.')
+        return
+      }
+
       try {
         const classRef = classes.find((c) => c.id === classId)
         await addDoc(collection(db, 'classStudents'), {
@@ -573,9 +595,10 @@ function ClassManagementPanel({ currentUser }) {
           className: classRef?.name || null,
           teacherUid: currentUser.uid,
           teacherName: currentUser.displayName || currentUser.email || null,
-          studentEmail: raw,
-          studentUid: null,
-          status: 'invited',
+          studentEmail: lookup.email || raw,
+          studentUid: lookup.uid,
+          studentName: lookup.display_name || null,
+          status: 'active',
           createdAt: serverTimestamp(),
         })
       } catch {
@@ -586,9 +609,10 @@ function ClassManagementPanel({ currentUser }) {
           className: classes.find((c) => c.id === classId)?.name || null,
           teacherUid: currentUser.uid,
           teacherName: currentUser.displayName || currentUser.email || null,
-          studentEmail: raw,
-          studentUid: null,
-          status: 'invited',
+          studentEmail: lookup.email || raw,
+          studentUid: lookup.uid,
+          studentName: lookup.display_name || null,
+          status: 'active',
           createdAt: Date.now(),
         })
         writeLocal(localStudentsKey, localStudents)
@@ -597,6 +621,8 @@ function ClassManagementPanel({ currentUser }) {
 
       updateStudentDraft(classId, '')
       await refreshData()
+    } catch (err) {
+      setErrorMessage(err.message || 'Could not add student. Please try again.')
     } finally {
       setAddingStudentForClass(null)
     }
