@@ -324,7 +324,6 @@ function ClassManagementPanel({ currentUser }) {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser])
@@ -332,14 +331,12 @@ function ClassManagementPanel({ currentUser }) {
   useEffect(() => {
     if (!selectedClassId) return
     if (!classes.some((c) => c.id === selectedClassId)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedClassId(null)
     }
   }, [classes, selectedClassId])
 
   useEffect(() => {
     if (!selectedClassId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setClassDetailTab('roster')
     }
   }, [selectedClassId])
