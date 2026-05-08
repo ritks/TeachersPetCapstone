@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import AnalyticsDashboard from '../AnalyticsDashboard'
-import { addDoc, collection, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { Badge, Button, Card, Input, Panel, StatCard } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
@@ -69,6 +69,15 @@ function ClassManagementPanel({ currentUser }) {
   const [editingModuleDescriptionId, setEditingModuleDescriptionId] = useState(null)
   const [editingModuleDescriptionValue, setEditingModuleDescriptionValue] = useState('')
   const [savingModuleDescriptionId, setSavingModuleDescriptionId] = useState(null)
+  const [editingModuleNameId, setEditingModuleNameId] = useState(null)
+  const [editingModuleNameValue, setEditingModuleNameValue] = useState('')
+  const [savingModuleNameId, setSavingModuleNameId] = useState(null)
+  const [editingGroupNameId, setEditingGroupNameId] = useState(null)
+  const [editingGroupNameValue, setEditingGroupNameValue] = useState('')
+  const [savingGroupNameId, setSavingGroupNameId] = useState(null)
+  const [deletingStudentEmail, setDeletingStudentEmail] = useState(null)
+  const [deletingGroupId, setDeletingGroupId] = useState(null)
+  const [deletingModuleId, setDeletingModuleId] = useState(null)
   const [moduleSearchTerm, setModuleSearchTerm] = useState('')
   const [moduleStatusFilter, setModuleStatusFilter] = useState('all')
 
@@ -458,6 +467,117 @@ function ClassManagementPanel({ currentUser }) {
     setEditingModuleDescriptionValue('')
   }
 
+  const handleStartEditModuleName = (moduleItem) => {
+    setEditingModuleNameId(moduleItem.id)
+    setEditingModuleNameValue(moduleItem.name || '')
+  }
+
+  const handleCancelEditModuleName = () => {
+    setEditingModuleNameId(null)
+    setEditingModuleNameValue('')
+  }
+
+  const handleSaveModuleName = async ({ classId, moduleItem }) => {
+    if (!currentUser || !moduleItem?.id) return
+    const trimmed = editingModuleNameValue.trim()
+    if (!trimmed) return
+
+    setErrorMessage('')
+    setInfoMessage('')
+    setSavingModuleNameId(moduleItem.id)
+
+    try {
+      const response = await fetch(apiUrl(`/modules/${moduleItem.id}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Could not update module name (${response.status})`)
+      }
+
+      const updated = await response.json()
+      setModulesByClass((prev) => ({
+        ...prev,
+        [classId]: (prev[classId] || []).map((row) => (
+          row.id === moduleItem.id ? { ...row, name: updated?.name ?? trimmed } : row
+        )),
+      }))
+
+      setInfoMessage('Module name updated.')
+      setEditingModuleNameId(null)
+      setEditingModuleNameValue('')
+    } catch {
+      setErrorMessage('Could not update module name.')
+    } finally {
+      setSavingModuleNameId(null)
+    }
+  }
+
+  const handleStartEditGroupName = (groupItem) => {
+    setEditingGroupNameId(groupItem.id)
+    setEditingGroupNameValue(groupItem.name || '')
+  }
+
+  const handleCancelEditGroupName = () => {
+    setEditingGroupNameId(null)
+    setEditingGroupNameValue('')
+  }
+
+  const handleSaveGroupName = async ({ classId, groupItem }) => {
+    if (!currentUser || !groupItem?.id) return
+    const trimmed = editingGroupNameValue.trim()
+    if (!trimmed) return
+
+    const duplicate = (groupsByClass[classId] || []).some(
+      (g) => g.id !== groupItem.id && g.name.toLowerCase() === trimmed.toLowerCase(),
+    )
+    if (duplicate) {
+      setErrorMessage('A group with that name already exists in this class.')
+      return
+    }
+
+    setErrorMessage('')
+    setInfoMessage('')
+    setSavingGroupNameId(groupItem.id)
+
+    try {
+      try {
+        if (!String(groupItem.id).startsWith('local-')) {
+          await setDoc(doc(db, 'classGroups', groupItem.id), {
+            name: trimmed,
+            updatedAt: serverTimestamp(),
+          }, { merge: true })
+        } else {
+          throw new Error('Local group')
+        }
+      } catch {
+        const localGroups = readLocal(localGroupsKey, [])
+        const idx = localGroups.findIndex((row) => row.id === groupItem.id)
+        if (idx >= 0) {
+          localGroups[idx] = { ...localGroups[idx], name: trimmed, updatedAt: Date.now() }
+          writeLocal(localGroupsKey, localGroups)
+        }
+        setInfoMessage('Group name saved locally (cloud permissions blocked).')
+      }
+
+      setGroupsByClass((prev) => ({
+        ...prev,
+        [classId]: (prev[classId] || []).map((row) => (
+          row.id === groupItem.id ? { ...row, name: trimmed } : row
+        )),
+      }))
+
+      setEditingGroupNameId(null)
+      setEditingGroupNameValue('')
+    } catch {
+      setErrorMessage('Could not update group name.')
+    } finally {
+      setSavingGroupNameId(null)
+    }
+  }
+
   const handleSaveModuleDescription = async ({ classId, moduleItem }) => {
     if (!currentUser || !moduleItem?.id) return
 
@@ -495,6 +615,65 @@ function ClassManagementPanel({ currentUser }) {
       setErrorMessage('Could not update module description.')
     } finally {
       setSavingModuleDescriptionId(null)
+    }
+  }
+
+  const handleDeleteModule = async ({ classId, moduleItem }) => {
+    if (!currentUser || !classId || !moduleItem?.id) return
+    if (!window.confirm(`Delete module "${moduleItem.name}"? This will remove all documents and cannot be undone.`)) return
+
+    setDeletingModuleId(moduleItem.id)
+    setErrorMessage('')
+    try {
+      // 1. Delete from backend (removes documents + vector store)
+      const res = await fetch(apiUrl(`/modules/${moduleItem.id}`), { method: 'DELETE' })
+      if (!res.ok) throw new Error(`Backend delete failed (${res.status})`)
+
+      // 2. Delete classModules Firestore doc
+      try {
+        if (moduleItem.classModuleDocId && !String(moduleItem.classModuleDocId).startsWith('local-')) {
+          await deleteDoc(doc(db, 'classModules', moduleItem.classModuleDocId))
+        } else {
+          throw new Error('Local link')
+        }
+      } catch {
+        const localLinks = readLocal(localLinksKey, [])
+        writeLocal(localLinksKey, localLinks.filter(
+          (row) => !(row.classId === classId && row.moduleId === moduleItem.id),
+        ))
+      }
+
+      // 3. Clean up moduleGroupAccess for this module
+      const accessDocId = `${classId}_${moduleItem.id}`.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 120)
+      try {
+        await deleteDoc(doc(db, 'moduleGroupAccess', accessDocId))
+      } catch {
+        const localGroupAccess = readLocal(localGroupAccessKey, [])
+        writeLocal(localGroupAccessKey, localGroupAccess.filter(
+          (row) => !(row.classId === classId && row.moduleId === moduleItem.id),
+        ))
+      }
+
+      // 4. Update local state
+      setModulesByClass((prev) => ({
+        ...prev,
+        [classId]: (prev[classId] || []).filter((row) => row.id !== moduleItem.id),
+      }))
+      setModuleGroupAccess((prev) => {
+        const next = { ...prev }
+        delete next[moduleGroupKey(classId, moduleItem.id)]
+        return next
+      })
+      setInsightsByClass((prev) => ({
+        ...prev,
+        [classId]: prev[classId]
+          ? { ...prev[classId], modules: Math.max(0, (prev[classId].modules || 1) - 1) }
+          : prev[classId],
+      }))
+    } catch {
+      setErrorMessage('Could not delete module.')
+    } finally {
+      setDeletingModuleId(null)
     }
   }
 
@@ -646,6 +825,141 @@ function ClassManagementPanel({ currentUser }) {
       await refreshData()
     } finally {
       setCreatingGroupForClass(null)
+    }
+  }
+
+  const handleRemoveStudent = async ({ classId, studentItem }) => {
+    if (!currentUser || !studentItem?.studentEmail) return
+    if (!window.confirm(`Remove ${studentItem.studentEmail} from this class? They will also be removed from all groups.`)) return
+
+    setDeletingStudentEmail(studentItem.studentEmail)
+    setErrorMessage('')
+    try {
+      // 1. Delete from classStudents
+      try {
+        if (studentItem.id && !String(studentItem.id).startsWith('local-')) {
+          await deleteDoc(doc(db, 'classStudents', studentItem.id))
+        } else {
+          throw new Error('Local student')
+        }
+      } catch {
+        const localStudents = readLocal(localStudentsKey, [])
+        writeLocal(localStudentsKey, localStudents.filter(
+          (row) => !(row.studentEmail === studentItem.studentEmail && row.classId === classId),
+        ))
+      }
+
+      // 2. Remove from all groups in this class
+      const classGroupList = groupsByClass[classId] || []
+      await Promise.all(
+        classGroupList
+          .filter((g) => (g.members || []).includes(studentItem.studentEmail))
+          .map(async (g) => {
+            const nextMembers = g.members.filter((e) => e !== studentItem.studentEmail)
+            try {
+              if (!String(g.id).startsWith('local-')) {
+                await setDoc(doc(db, 'classGroups', g.id), { members: nextMembers, updatedAt: serverTimestamp() }, { merge: true })
+              } else {
+                throw new Error('Local group')
+              }
+            } catch {
+              const localGroups = readLocal(localGroupsKey, [])
+              const idx = localGroups.findIndex((row) => row.id === g.id)
+              if (idx >= 0) {
+                localGroups[idx] = { ...localGroups[idx], members: nextMembers }
+                writeLocal(localGroupsKey, localGroups)
+              }
+            }
+          }),
+      )
+
+      // 3. Update local state
+      setStudentsByClass((prev) => ({
+        ...prev,
+        [classId]: (prev[classId] || []).filter((s) => s.studentEmail !== studentItem.studentEmail),
+      }))
+      setGroupsByClass((prev) => ({
+        ...prev,
+        [classId]: (prev[classId] || []).map((g) => ({
+          ...g,
+          members: (g.members || []).filter((e) => e !== studentItem.studentEmail),
+        })),
+      }))
+      setInsightsByClass((prev) => ({
+        ...prev,
+        [classId]: prev[classId]
+          ? { ...prev[classId], activeStudents: Math.max(0, (prev[classId].activeStudents || 1) - 1) }
+          : prev[classId],
+      }))
+    } catch {
+      setErrorMessage('Could not remove student.')
+    } finally {
+      setDeletingStudentEmail(null)
+    }
+  }
+
+  const handleDeleteGroup = async ({ classId, groupItem }) => {
+    if (!currentUser || !groupItem?.id) return
+    if (!window.confirm(`Delete group "${groupItem.name}"? It will be unassigned from all modules.`)) return
+
+    setDeletingGroupId(groupItem.id)
+    setErrorMessage('')
+    try {
+      // 1. Delete from classGroups
+      try {
+        if (!String(groupItem.id).startsWith('local-')) {
+          await deleteDoc(doc(db, 'classGroups', groupItem.id))
+        } else {
+          throw new Error('Local group')
+        }
+      } catch {
+        const localGroups = readLocal(localGroupsKey, [])
+        writeLocal(localGroupsKey, localGroups.filter((row) => row.id !== groupItem.id))
+      }
+
+      // 2. Remove this groupId from moduleGroupAccess for all modules in this class
+      const classModuleList = modulesByClass[classId] || []
+      await Promise.all(
+        classModuleList.map(async (moduleItem) => {
+          const key = moduleGroupKey(classId, moduleItem.id)
+          const currentGroupIds = moduleGroupAccess[key] || []
+          if (!currentGroupIds.includes(groupItem.id)) return
+          const nextGroupIds = currentGroupIds.filter((id) => id !== groupItem.id)
+          const accessDocId = `${classId}_${moduleItem.id}`.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 120)
+          try {
+            await setDoc(doc(db, 'moduleGroupAccess', accessDocId), {
+              groupIds: nextGroupIds,
+              updatedAt: serverTimestamp(),
+            }, { merge: true })
+          } catch {
+            const localGroupAccess = readLocal(localGroupAccessKey, [])
+            const idx = localGroupAccess.findIndex((row) => row.classId === classId && row.moduleId === moduleItem.id)
+            if (idx >= 0) {
+              localGroupAccess[idx] = { ...localGroupAccess[idx], groupIds: nextGroupIds }
+              writeLocal(localGroupAccessKey, localGroupAccess)
+            }
+          }
+        }),
+      )
+
+      // 3. Update local state
+      setGroupsByClass((prev) => ({
+        ...prev,
+        [classId]: (prev[classId] || []).filter((g) => g.id !== groupItem.id),
+      }))
+      setModuleGroupAccess((prev) => {
+        const next = { ...prev }
+        Object.keys(next).forEach((key) => {
+          if (key.startsWith(`${classId}::`)) {
+            next[key] = (next[key] || []).filter((id) => id !== groupItem.id)
+          }
+        })
+        return next
+      })
+    } catch {
+      setErrorMessage('Could not delete group.')
+    } finally {
+      setDeletingGroupId(null)
     }
   }
 
@@ -1076,8 +1390,17 @@ function ClassManagementPanel({ currentUser }) {
                             <span className="text-xs text-[var(--color-text-muted)]">No students yet.</span>
                           ) : (
                             classStudents.map((s) => (
-                              <div key={`${classItem.id}-${s.studentEmail}`} className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/80 px-2.5 py-2 text-sm text-[var(--color-text-secondary)]">
-                                {s.studentEmail}
+                              <div key={`${classItem.id}-${s.studentEmail}`} className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/80 px-2.5 py-2 text-sm text-[var(--color-text-secondary)] flex items-center justify-between gap-2">
+                                <span>{s.studentEmail}</span>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={deletingStudentEmail === s.studentEmail}
+                                  onClick={() => handleRemoveStudent({ classId: classItem.id, studentItem: s })}
+                                >
+                                  {deletingStudentEmail === s.studentEmail ? 'Removing...' : 'Remove'}
+                                </Button>
                               </div>
                             ))
                           )}
@@ -1121,8 +1444,56 @@ function ClassManagementPanel({ currentUser }) {
                             classGroups.map((groupItem) => (
                               <div key={groupItem.id} className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/75 p-3">
                                 <div className="flex items-center justify-between gap-2">
-                                  <p className="text-sm font-semibold text-[var(--color-text-primary)]">{groupItem.name}</p>
-                                  <Badge tone="brand">{(groupItem.members || []).length} students</Badge>
+                                  {editingGroupNameId === groupItem.id ? (
+                                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                      <Input
+                                        value={editingGroupNameValue}
+                                        onChange={(e) => setEditingGroupNameValue(e.target.value)}
+                                        placeholder="Group name"
+                                        className="text-sm"
+                                      />
+                                      <Button
+                                        type="button"
+                                        variant="primary"
+                                        size="sm"
+                                        disabled={!editingGroupNameValue.trim() || savingGroupNameId === groupItem.id}
+                                        onClick={() => handleSaveGroupName({ classId: classItem.id, groupItem })}
+                                      >
+                                        {savingGroupNameId === groupItem.id ? 'Saving...' : 'Save'}
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        disabled={savingGroupNameId === groupItem.id}
+                                        onClick={handleCancelEditGroupName}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{groupItem.name}</p>
+                                      <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => handleStartEditGroupName(groupItem)}
+                                      >
+                                        Rename
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        disabled={deletingGroupId === groupItem.id}
+                                        onClick={() => handleDeleteGroup({ classId: classItem.id, groupItem })}
+                                      >
+                                        {deletingGroupId === groupItem.id ? 'Deleting...' : 'Delete'}
+                                      </Button>
+                                    </div>
+                                  )}
+                                  <Badge tone="brand" className="shrink-0">{(groupItem.members || []).length} students</Badge>
                                 </div>
                                 <div className="mt-2 flex flex-wrap gap-1.5">
                                   {classStudents.length === 0 ? (
@@ -1234,7 +1605,36 @@ function ClassManagementPanel({ currentUser }) {
                                 <div key={moduleItem.id} className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 p-3">
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
-                                      <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{moduleItem.name}</p>
+                                      {editingModuleNameId === moduleItem.id ? (
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <Input
+                                            value={editingModuleNameValue}
+                                            onChange={(e) => setEditingModuleNameValue(e.target.value)}
+                                            placeholder="Module name"
+                                            className="text-sm"
+                                          />
+                                          <Button
+                                            type="button"
+                                            variant="primary"
+                                            size="sm"
+                                            disabled={!editingModuleNameValue.trim() || savingModuleNameId === moduleItem.id}
+                                            onClick={() => handleSaveModuleName({ classId: classItem.id, moduleItem })}
+                                          >
+                                            {savingModuleNameId === moduleItem.id ? 'Saving...' : 'Save'}
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant="secondary"
+                                            size="sm"
+                                            disabled={savingModuleNameId === moduleItem.id}
+                                            onClick={handleCancelEditModuleName}
+                                          >
+                                            Cancel
+                                          </Button>
+                                        </div>
+                                      ) : (
+                                        <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{moduleItem.name}</p>
+                                      )}
                                       {editingModuleDescriptionId === moduleItem.id ? (
                                         <div className="mt-1.5 flex flex-col gap-2">
                                           <Input
@@ -1277,7 +1677,17 @@ function ClassManagementPanel({ currentUser }) {
                                       <Badge tone={moduleItem.moduleStatus === 'archived' ? 'warning' : 'neutral'}>
                                         {moduleItem.moduleStatus === 'archived' ? 'Archived' : 'Module'}
                                       </Badge>
-                                      {editingModuleDescriptionId !== moduleItem.id && (
+                                      {editingModuleDescriptionId !== moduleItem.id && editingModuleNameId !== moduleItem.id && (
+                                        <Button
+                                          type="button"
+                                          variant="secondary"
+                                          size="sm"
+                                          onClick={() => handleStartEditModuleName(moduleItem)}
+                                        >
+                                          Rename
+                                        </Button>
+                                      )}
+                                      {editingModuleDescriptionId !== moduleItem.id && editingModuleNameId !== moduleItem.id && (
                                         <Button
                                           type="button"
                                           variant="secondary"
@@ -1298,6 +1708,17 @@ function ClassManagementPanel({ currentUser }) {
                                       >
                                         {moduleItem.moduleStatus === 'archived' ? 'Restore' : 'Archive'}
                                       </Button>
+                                      {editingModuleDescriptionId !== moduleItem.id && editingModuleNameId !== moduleItem.id && (
+                                        <Button
+                                          type="button"
+                                          variant="secondary"
+                                          size="sm"
+                                          disabled={deletingModuleId === moduleItem.id}
+                                          onClick={() => handleDeleteModule({ classId: classItem.id, moduleItem })}
+                                        >
+                                          {deletingModuleId === moduleItem.id ? 'Deleting...' : 'Delete'}
+                                        </Button>
+                                      )}
                                     </div>
                                   </div>
 
