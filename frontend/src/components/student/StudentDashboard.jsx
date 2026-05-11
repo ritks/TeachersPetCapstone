@@ -7,10 +7,7 @@ import LogoMark from '../common/LogoMark'
 import { useStudent } from '../../contexts/StudentContext'
 import { apiUrl } from '../../lib/api'
 import ThemeToggleButton from '../common/ThemeToggleButton'
-
-function keyFor(classId, moduleId) {
-  return `${classId}::${moduleId}`
-}
+import { buildStudentClassCards, normalizeEmail } from './studentDashboardAccess'
 
 export default function StudentDashboard({ currentUser, onLogout }) {
   const navigate = useNavigate()
@@ -25,7 +22,7 @@ export default function StudentDashboard({ currentUser, onLogout }) {
       setLoading(true)
       setError('')
       try {
-        const email = (currentUser.email || '').toLowerCase()
+        const email = normalizeEmail(currentUser.email)
         const enrollmentSettled = await Promise.allSettled([
           getDocs(query(collection(db, 'classStudents'), where('studentUid', '==', currentUser.uid))),
           email ? getDocs(query(collection(db, 'classStudents'), where('studentEmail', '==', email))) : Promise.resolve({ docs: [] }),
@@ -76,6 +73,18 @@ export default function StudentDashboard({ currentUser, onLogout }) {
             : { classId: classIds[idx], rows: [] }
         ))
 
+        const groupSettled = await Promise.allSettled(
+          classIds.map(async (classId) => {
+            const snap = await getDocs(query(collection(db, 'classGroups'), where('classId', '==', classId)))
+            return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+          }),
+        )
+        const moduleGroupAccessSettled = await Promise.allSettled(
+          classIds.map(async (classId) => {
+            const snap = await getDocs(query(collection(db, 'moduleGroupAccess'), where('classId', '==', classId)))
+            return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+          }),
+        )
         const accessSettled = await Promise.allSettled([
           getDocs(query(collection(db, 'moduleAccess'), where('studentUid', '==', currentUser.uid))),
           email ? getDocs(query(collection(db, 'moduleAccess'), where('studentEmail', '==', email))) : Promise.resolve({ docs: [] }),
@@ -96,17 +105,21 @@ export default function StudentDashboard({ currentUser, onLogout }) {
           })
         })
 
-        const accessMap = {}
         const accessRows = []
         accessSettled.forEach((result) => {
           if (result.status !== 'fulfilled') return
           result.value.docs.forEach((d) => {
             const data = d.data()
             if (!data.classId || !data.moduleId) return
-            accessMap[keyFor(data.classId, data.moduleId)] = Boolean(data.isUnlocked)
             accessRows.push(data)
           })
         })
+        const groupRows = groupSettled.flatMap((result) => (
+          result.status === 'fulfilled' ? result.value : []
+        ))
+        const moduleGroupAccessRows = moduleGroupAccessSettled.flatMap((result) => (
+          result.status === 'fulfilled' ? result.value : []
+        ))
 
         const codeRows = codesSettled[0].status === 'fulfilled'
           ? codesSettled[0].value.docs.map((d) => ({ code: d.id, ...d.data() }))
@@ -120,76 +133,17 @@ export default function StudentDashboard({ currentUser, onLogout }) {
           moduleMetaById[moduleItem.id] = moduleItem
         })
 
-        const courseCodeByModuleKey = {}
-        codeRows.forEach((row) => {
-          if (!row.classId || !row.moduleId) return
-          if (row.className) classNameByClassId[row.classId] = row.className
-          courseCodeByModuleKey[keyFor(row.classId, row.moduleId)] = row.code
-        })
-
-        accessRows.forEach((row) => {
-          if (row.classId && row.className && !classNameByClassId[row.classId]) {
-            classNameByClassId[row.classId] = row.className
-          }
-        })
-        enrollments.forEach((row) => {
-          if (row.classId && row.className && !classNameByClassId[row.classId]) {
-            classNameByClassId[row.classId] = row.className
-          }
-        })
-
-        const cards = classDocs.map((classDoc) => {
-          const fromClassModules = (moduleMapByClass[classDoc.id] || []).map((m) => ({
-            moduleId: m.moduleId,
-            moduleName: m.moduleName || 'Module',
-            moduleStatus: m.moduleStatus || 'active',
-          }))
-          const fromAccess = accessRows
-            .filter((a) => a.classId === classDoc.id)
-            .map((a) => ({
-              moduleId: a.moduleId,
-              moduleName: a.moduleName || 'Module',
-              moduleStatus: 'active',
-            }))
-          const fromCodes = codeRows
-            .filter((c) => c.classId === classDoc.id)
-            .map((c) => ({
-              moduleId: c.moduleId,
-              moduleName: c.moduleName || 'Module',
-              moduleStatus: 'active',
-            }))
-
-          const seen = new Set()
-          const classModules = [...fromClassModules, ...fromAccess, ...fromCodes].filter((m) => {
-            if (!m.moduleId || seen.has(m.moduleId)) return false
-            seen.add(m.moduleId)
-            return true
-          })
-
-          const modules = classModules.map((m) => {
-            const unlocked = accessMap[keyFor(classDoc.id, m.moduleId)] === true
-            const moduleMeta = moduleMetaById[m.moduleId]
-            return {
-              moduleId: m.moduleId,
-              moduleName: moduleMeta?.name || m.moduleName || 'Module',
-              moduleDescription: moduleMeta?.description || null,
-              moduleStatus: m.moduleStatus || 'active',
-              unlocked,
-              courseCode: courseCodeByModuleKey[keyFor(classDoc.id, m.moduleId)] || null,
-            }
-          })
-
-          const enrollmentRow = enrollments.find((e) => e.classId === classDoc.id)
-          const inferredName = (classDoc.name && classDoc.name !== 'Class')
-            ? classDoc.name
-            : enrollmentRow?.className || classNameByClassId[classDoc.id] || 'Class'
-
-          return {
-            id: classDoc.id,
-            name: inferredName,
-            teacherName: classDoc.teacherName || classDoc.teacherUid || enrollmentRow?.teacherName || null,
-            modules,
-          }
+        const cards = buildStudentClassCards({
+          accessRows,
+          classDocs,
+          classNameByClassId,
+          codeRows,
+          enrollments,
+          groupRows,
+          moduleGroupAccessRows,
+          moduleMapByClass,
+          moduleMetaById,
+          studentEmail: email,
         })
         setClassCards(cards)
       } catch {
