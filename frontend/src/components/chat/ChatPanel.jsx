@@ -47,6 +47,14 @@ const QUICK_ACTIONS = CHAT_COPY.quickActions.map((action, index) => ({
   icon: QUICK_ACTION_ICONS[index],
 }))
 
+const STREAM_DELAY_MS = 12
+
+function getStreamChunkSize(text) {
+  if (text.length > 1800) return 4
+  if (text.length > 800) return 2
+  return 1
+}
+
 function StudentEmptyState({ greeting, onQuickAction }) {
   return (
     <div className="flex flex-col items-center justify-center h-full px-6 py-12 select-none">
@@ -361,9 +369,14 @@ export function Bubble({ message, onCitationClick }) {
             {message.content}
           </p>
         ) : (
-          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-            {message.content}
-          </ReactMarkdown>
+          <>
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {message.content}
+            </ReactMarkdown>
+            {message.isStreaming && (
+              <span className="inline-block ml-0.5 h-4 w-1 translate-y-0.5 rounded-full bg-[var(--color-brand-500)] animate-pulse" aria-hidden />
+            )}
+          </>
         )}
         {!isStudent && message.citations && message.citations.length > 0 && (
           <CitationCards citations={message.citations} onCitationClick={onCitationClick} />
@@ -408,8 +421,79 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
     () => CHAT_COPY.greetings[Math.floor(Math.random() * CHAT_COPY.greetings.length)]
   )
   const scrollRef = useRef(null)
+  const streamTimerRef = useRef(null)
+  const streamGenerationRef = useRef(0)
+
+  const clearStreamTimer = () => {
+    if (streamTimerRef.current) {
+      window.clearTimeout(streamTimerRef.current)
+      streamTimerRef.current = null
+    }
+  }
+
+  const revealTutorMessage = ({ baseMessages, answer, citations, sessionId: nextSessionId, isError = false }) => new Promise((resolve) => {
+    clearStreamTimer()
+    const generation = streamGenerationRef.current + 1
+    streamGenerationRef.current = generation
+
+    if (isError || !answer) {
+      const finalMessages = [...baseMessages, { role: 'tutor', content: answer, isError, citations }]
+      setMessages(finalMessages)
+      if (onMessagesUpdate) onMessagesUpdate(finalMessages, nextSessionId)
+      if (onCitationsChange && citations.length > 0) onCitationsChange(citations)
+      resolve(finalMessages)
+      return
+    }
+
+    const chunkSize = getStreamChunkSize(answer)
+    const placeholder = { role: 'tutor', content: '', isError: false, citations: [], isStreaming: true }
+    setMessages([...baseMessages, placeholder])
+
+    let cursor = 0
+    const tick = () => {
+      if (streamGenerationRef.current !== generation) {
+        resolve(null)
+        return
+      }
+
+      cursor = Math.min(answer.length, cursor + chunkSize)
+      const visible = answer.slice(0, cursor)
+      const complete = cursor >= answer.length
+      const nextMessages = [
+        ...baseMessages,
+        {
+          role: 'tutor',
+          content: visible,
+          isError: false,
+          citations: complete ? citations : [],
+          isStreaming: !complete,
+        },
+      ]
+
+      setMessages(nextMessages)
+
+      if (complete) {
+        streamTimerRef.current = null
+        if (onMessagesUpdate) onMessagesUpdate(nextMessages, nextSessionId)
+        if (onCitationsChange && citations.length > 0) onCitationsChange(citations)
+        resolve(nextMessages)
+        return
+      }
+
+      streamTimerRef.current = window.setTimeout(tick, STREAM_DELAY_MS)
+    }
+
+    streamTimerRef.current = window.setTimeout(tick, STREAM_DELAY_MS)
+  })
+
+  useEffect(() => () => {
+    clearStreamTimer()
+    streamGenerationRef.current += 1
+  }, [])
 
   useEffect(() => {
+    clearStreamTimer()
+    streamGenerationRef.current += 1
     if (sessionKey !== undefined) {
       setMessages(initialMessages ?? [WELCOME_MESSAGE])
       setSessionId(initialBackendSessionId ?? null)
@@ -418,6 +502,8 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
   }, [sessionKey, initialMessages, initialBackendSessionId])
 
   useEffect(() => {
+    clearStreamTimer()
+    streamGenerationRef.current += 1
     if (sessionKey === undefined) {
       setMessages([WELCOME_MESSAGE])
       setSessionId(initialBackendSessionId ?? null)
@@ -459,10 +545,13 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
       }
       setSessionId(data.session_id)
       const citations = data.citations || []
-      const finalMessages = [...withQuestion, { role: 'tutor', content: data.answer, isError: data.error, citations }]
-      setMessages(finalMessages)
-      if (onMessagesUpdate) onMessagesUpdate(finalMessages, data.session_id)
-      if (onCitationsChange && citations.length > 0) onCitationsChange(citations)
+      const finalMessages = await revealTutorMessage({
+        baseMessages: withQuestion,
+        answer: data.answer,
+        citations,
+        sessionId: data.session_id,
+        isError: data.error,
+      })
 
       if (userType === 'student' && studentData) {
         fetch(apiUrl('/prompts'), {
@@ -481,6 +570,7 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
           }),
         }).catch(() => {})
       }
+      if (!finalMessages && onMessagesUpdate) onMessagesUpdate(withQuestion, data.session_id)
     } catch {
       const errMessages = [
         ...withQuestion,
@@ -510,6 +600,7 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
         }).catch(() => {})
       }
     } finally {
+      clearStreamTimer()
       setLoading(false)
     }
   }
@@ -535,7 +626,7 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
             {messages.map((msg, i) => (
               <Bubble key={i} message={msg} onCitationClick={(c) => onCitationsChange?.([c])} />
             ))}
-            {loading && <TypingIndicator />}
+            {loading && !messages.some((msg) => msg.isStreaming) && <TypingIndicator />}
             <div ref={scrollRef} />
           </div>
         )}

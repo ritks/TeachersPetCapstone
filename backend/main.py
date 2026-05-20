@@ -35,10 +35,12 @@ try:
     import firebase_admin
     from firebase_admin import auth as firebase_auth
     from firebase_admin import credentials as firebase_credentials
+    from firebase_admin import firestore as firebase_firestore
 except Exception:
     firebase_admin = None
     firebase_auth = None
     firebase_credentials = None
+    firebase_firestore = None
 
 # ── CORS ──────────────────────────────────────────────────────────────
 _allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
@@ -337,6 +339,20 @@ class AnalyticsSummaryResponse(BaseModel):
     sampled_rows: int
 
 
+class StudentAccountLookupRequest(BaseModel):
+    email: str
+
+
+class StudentAccountLookupResponse(BaseModel):
+    exists: bool
+    is_student: bool = False
+    uid: Optional[str] = None
+    email: Optional[str] = None
+    display_name: Optional[str] = None
+    role: Optional[str] = None
+    message: Optional[str] = None
+
+
 def _init_firebase_admin():
     if not firebase_admin:
         print("[WARN] firebase-admin package not installed; authenticated chat/session endpoints disabled")
@@ -385,6 +401,24 @@ def _verify_firebase_token(id_token: str) -> str:
         raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
 
 
+def _get_firestore_client():
+    if not firebase_admin or not firebase_firestore:
+        raise HTTPException(status_code=503, detail="Firebase service unavailable")
+    if not firebase_admin._apps:
+        _init_firebase_admin()
+    return firebase_firestore.client()
+
+
+def _get_user_profile(uid: str) -> dict:
+    try:
+        snap = _get_firestore_client().collection("users").document(uid).get()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=503, detail="Could not read user profile")
+    return snap.to_dict() or {}
+
+
 def get_optional_user_uid(authorization: Optional[str] = Header(default=None)) -> Optional[str]:
     token = _bearer_token_from_header(authorization)
     if not token:
@@ -410,6 +444,50 @@ app.include_router(postgres_data.router)
 def on_startup():
     init_db()
     _init_firebase_admin()
+
+
+# =====================================================================
+#  ACCOUNT ENDPOINTS
+# =====================================================================
+
+@app.post("/students/lookup", response_model=StudentAccountLookupResponse)
+async def lookup_student_account(
+    body: StudentAccountLookupRequest,
+    requester_uid: str = Depends(get_current_user_uid),
+):
+    requester_profile = _get_user_profile(requester_uid)
+    if requester_profile.get("role") != "teacher":
+        raise HTTPException(status_code=403, detail="Teacher account required")
+
+    email = (body.email or "").strip().lower()
+    if "@" not in email:
+        raise HTTPException(status_code=400, detail="Please enter a valid student email")
+
+    if not firebase_auth:
+        raise HTTPException(status_code=503, detail="Authentication service unavailable")
+
+    try:
+        user = firebase_auth.get_user_by_email(email)
+    except Exception as exc:
+        if exc.__class__.__name__ == "UserNotFoundError":
+            return StudentAccountLookupResponse(
+                exists=False,
+                message="No account exists for that email address.",
+            )
+        raise HTTPException(status_code=503, detail="Could not verify student account")
+
+    profile = _get_user_profile(user.uid)
+    role = profile.get("role")
+    is_student = role == "student"
+    return StudentAccountLookupResponse(
+        exists=True,
+        is_student=is_student,
+        uid=user.uid if is_student else None,
+        email=(user.email or email).lower(),
+        display_name=profile.get("displayName") or user.display_name,
+        role=role,
+        message=None if is_student else "That account exists, but it is not a student account.",
+    )
 
 
 # =====================================================================
