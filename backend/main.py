@@ -14,8 +14,9 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from database.db import get_db, init_db
+from database.db import SessionLocal, get_db, init_db
 from database.models import Module, Document, ChatSession, ChatMessage
+from database.app_models import UserProfile
 from rag.embeddings import EmbeddingService
 from rag.vector_store import VectorStore
 from rag.retriever import Retriever
@@ -35,12 +36,10 @@ try:
     import firebase_admin
     from firebase_admin import auth as firebase_auth
     from firebase_admin import credentials as firebase_credentials
-    from firebase_admin import firestore as firebase_firestore
 except Exception:
     firebase_admin = None
     firebase_auth = None
     firebase_credentials = None
-    firebase_firestore = None
 
 # ── CORS ──────────────────────────────────────────────────────────────
 _allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
@@ -401,22 +400,23 @@ def _verify_firebase_token(id_token: str) -> str:
         raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
 
 
-def _get_firestore_client():
-    if not firebase_admin or not firebase_firestore:
-        raise HTTPException(status_code=503, detail="Firebase service unavailable")
-    if not firebase_admin._apps:
-        _init_firebase_admin()
-    return firebase_firestore.client()
-
-
 def _get_user_profile(uid: str) -> dict:
+    session = SessionLocal()
     try:
-        snap = _get_firestore_client().collection("users").document(uid).get()
-    except HTTPException:
-        raise
+        row = session.query(UserProfile).filter(UserProfile.uid == uid).first()
     except Exception:
         raise HTTPException(status_code=503, detail="Could not read user profile")
-    return snap.to_dict() or {}
+    finally:
+        session.close()
+    if not row:
+        return {}
+    return {
+        "uid": row.uid,
+        "email": row.email,
+        "displayName": row.display_name,
+        "role": row.role,
+        "theme": row.theme,
+    }
 
 
 def get_optional_user_uid(authorization: Optional[str] = Header(default=None)) -> Optional[str]:
@@ -435,7 +435,7 @@ def get_current_user_uid(authorization: Optional[str] = Header(default=None)) ->
 
 from routes import postgres_data  # noqa: E402
 
-postgres_data.configure_auth(get_current_user_uid, get_optional_user_uid)
+postgres_data.configure_auth(get_current_user_uid)
 app.include_router(postgres_data.router)
 
 

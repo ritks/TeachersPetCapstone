@@ -24,13 +24,11 @@ from database.models import Module
 router = APIRouter(tags=["app-data"])
 
 _get_current_user_uid = None
-_get_optional_user_uid = None
 
 
-def configure_auth(get_uid_fn, get_optional_uid_fn=None):
-    global _get_current_user_uid, _get_optional_user_uid
+def configure_auth(get_uid_fn):
+    global _get_current_user_uid
     _get_current_user_uid = get_uid_fn
-    _get_optional_user_uid = get_optional_uid_fn or get_uid_fn
 
 
 def require_uid(authorization: Optional[str] = Header(default=None)) -> str:
@@ -287,15 +285,21 @@ def create_course_code(
 # ── Prompt logs (analytics) ───────────────────────────────────────────
 
 @router.post("/prompts")
-def create_prompt(body: PromptLogCreate, db: Session = Depends(get_db)):
+def create_prompt(
+    body: PromptLogCreate,
+    db: Session = Depends(get_db),
+    uid: str = Depends(require_uid),
+):
+    profile = db.query(UserProfile).filter(UserProfile.uid == uid).first()
+    student_email = (profile.email or "").lower() if profile and profile.email else None
     row = PromptLog(
         teacher_uid=body.teacher_uid,
         course_code=body.course_code,
         module_id=body.module_id,
         module_name=body.module_name,
         session_id=body.session_id,
-        student_uid=body.student_uid,
-        student_email=body.student_email,
+        student_uid=uid,
+        student_email=student_email,
         prompt=body.prompt,
         response=body.response,
         flag_category=body.flag_category,

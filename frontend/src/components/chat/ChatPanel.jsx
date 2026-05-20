@@ -5,6 +5,7 @@ import remarkMath from 'remark-math'
 import { CHAT_COPY } from '../../content/strings'
 import { getSpeechSynthesis, stripForSpeech, pickBestVoice, loadVoices } from '../../lib/speech'
 import { apiUrl } from '../../lib/api'
+import { apiFetch } from '../../lib/apiAuth'
 import { Button, Card, Input } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
 
@@ -553,11 +554,11 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
         isError: data.error,
       })
 
-      if (userType === 'student' && studentData) {
-        fetch(apiUrl('/prompts'), {
+      if (userType === 'student' && studentData && currentUser) {
+        apiFetch('/prompts', {
+          user: currentUser,
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: {
             teacher_uid: studentData.teacherUid ?? null,
             course_code: studentData.courseCode ?? null,
             module_id: selectedModuleId ?? null,
@@ -567,7 +568,7 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
             response: data.answer,
             flag_category: data.flag_category ?? null,
             flag_severity: data.flag_severity ?? null,
-          }),
+          },
         }).catch(() => {})
       }
       if (!finalMessages && onMessagesUpdate) onMessagesUpdate(withQuestion, data.session_id)
@@ -582,11 +583,11 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
       ]
       setMessages(errMessages)
       if (onMessagesUpdate) onMessagesUpdate(errMessages, sessionId)
-      if (userType === 'student' && studentData) {
-        fetch(apiUrl('/prompts'), {
+      if (userType === 'student' && studentData && currentUser) {
+        apiFetch('/prompts', {
+          user: currentUser,
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: {
             teacher_uid: studentData.teacherUid ?? null,
             course_code: studentData.courseCode ?? null,
             module_id: selectedModuleId ?? null,
@@ -596,7 +597,7 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
             response: CHAT_COPY.serverError,
             flag_category: 'system_error',
             flag_severity: 'high',
-          }),
+          },
         }).catch(() => {})
       }
     } finally {
