@@ -32,4 +32,5 @@ def get_db():
 
 def init_db():
     from . import models  # noqa: F401 — ensure models are registered
+    from . import app_models  # noqa: F401 — Firestore-migrated tables
     Base.metadata.create_all(bind=engine)

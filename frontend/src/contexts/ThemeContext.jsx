@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useState } from 'react'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { db } from '../firebase'
+import { apiFetch } from '../lib/apiAuth'
 
 const ThemeContext = createContext(null)
 
@@ -31,20 +30,15 @@ export function ThemeProvider({ children, currentUser, currentUserProfile, authL
     applyTheme(theme)
   }, [theme])
 
-  // Refresh from Firestore in case another device changed the saved preference.
   useEffect(() => {
     if (authLoading || !currentUser) return
-
-    const ref = doc(db, 'users', currentUser.uid)
-    getDoc(ref).then((snap) => {
-      if (snap.exists()) {
-        const saved = normalizeTheme(snap.data().theme)
+    apiFetch('/me', { user: currentUser })
+      .then((data) => {
+        const saved = normalizeTheme(data.theme)
         setRefreshedTheme({ uid: currentUser.uid, theme: saved })
         localStorage.setItem(STORAGE_KEY, saved)
-      }
-    }).catch(() => {
-      // Firestore unavailable — keep localStorage value
-    })
+      })
+      .catch(() => {})
   }, [authLoading, currentUser])
 
   const toggleTheme = async () => {
@@ -59,9 +53,9 @@ export function ThemeProvider({ children, currentUser, currentUserProfile, authL
 
     if (currentUser) {
       try {
-        await setDoc(doc(db, 'users', currentUser.uid), { theme: next }, { merge: true })
+        await apiFetch('/me', { user: currentUser, method: 'PUT', body: { theme: next } })
       } catch {
-        // Non-critical — UI already updated
+        // UI already updated
       }
     }
   }

@@ -1,13 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
-import { db } from '../../firebase'
 import { Badge, Button, Card, Panel } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
 import { useStudent } from '../../contexts/StudentContext'
-import { apiUrl } from '../../lib/api'
+import { apiFetch } from '../../lib/apiAuth'
 import ThemeToggleButton from '../common/ThemeToggleButton'
-import { buildStudentClassCards, normalizeEmail } from './studentDashboardAccess'
 
 export default function StudentDashboard({ currentUser, onLogout }) {
   const navigate = useNavigate()
@@ -22,132 +19,23 @@ export default function StudentDashboard({ currentUser, onLogout }) {
       setLoading(true)
       setError('')
       try {
-        const email = normalizeEmail(currentUser.email)
-        const enrollmentSettled = await Promise.allSettled([
-          getDocs(query(collection(db, 'classStudents'), where('studentUid', '==', currentUser.uid))),
-          email ? getDocs(query(collection(db, 'classStudents'), where('studentEmail', '==', email))) : Promise.resolve({ docs: [] }),
-        ])
-
-        const enrollmentMap = {}
-        enrollmentSettled.forEach((result) => {
-          if (result.status !== 'fulfilled') return
-          result.value.docs.forEach((d) => { enrollmentMap[d.id] = { id: d.id, ...d.data() } })
-        })
-        const enrollments = Object.values(enrollmentMap)
-        const classIds = [...new Set(enrollments.map((e) => e.classId).filter(Boolean))]
-
-        if (classIds.length === 0) {
-          setClassCards([])
-          setLoading(false)
-          return
-        }
-
-        const classDocSettled = await Promise.allSettled(
-          classIds.map(async (classId) => {
-            const snap = await getDoc(doc(db, 'teacherClasses', classId))
-            return snap.exists() ? { id: snap.id, ...snap.data() } : { id: classId, name: 'Class', teacherName: null }
-          }),
-        )
-        const classDocs = classDocSettled.map((res, idx) => (
-          res.status === 'fulfilled'
-            ? res.value
-            : {
-                id: classIds[idx],
-                name: enrollments.find((e) => e.classId === classIds[idx])?.className || 'Class',
-                teacherName: enrollments.find((e) => e.classId === classIds[idx])?.teacherName || null,
-              }
-        ))
-
-        const moduleRowsSettled = await Promise.allSettled(
-          classIds.map(async (classId) => {
-            const snap = await getDocs(query(collection(db, 'classModules'), where('classId', '==', classId)))
-            return {
-              classId,
-              rows: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
-            }
-          }),
-        )
-        const moduleDocsPerClass = moduleRowsSettled.map((res, idx) => (
-          res.status === 'fulfilled'
-            ? res.value
-            : { classId: classIds[idx], rows: [] }
-        ))
-
-        const groupSettled = await Promise.allSettled(
-          classIds.map(async (classId) => {
-            const snap = await getDocs(query(collection(db, 'classGroups'), where('classId', '==', classId)))
-            return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-          }),
-        )
-        const moduleGroupAccessSettled = await Promise.allSettled(
-          classIds.map(async (classId) => {
-            const snap = await getDocs(query(collection(db, 'moduleGroupAccess'), where('classId', '==', classId)))
-            return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-          }),
-        )
-        const accessSettled = await Promise.allSettled([
-          getDocs(query(collection(db, 'moduleAccess'), where('studentUid', '==', currentUser.uid))),
-          email ? getDocs(query(collection(db, 'moduleAccess'), where('studentEmail', '==', email))) : Promise.resolve({ docs: [] }),
-        ])
-        const codesSettled = await Promise.allSettled([
-          getDocs(collection(db, 'courseCodes')),
-        ])
-        const modulesMetaSettled = await Promise.allSettled([
-          fetch(apiUrl('/modules')),
-        ])
-
-        const moduleMapByClass = {}
-        const classNameByClassId = {}
-        moduleDocsPerClass.forEach(({ classId, rows }) => {
-          moduleMapByClass[classId] = rows
-          rows.forEach((row) => {
-            if (row.className && !classNameByClassId[classId]) classNameByClassId[classId] = row.className
-          })
-        })
-
-        const accessRows = []
-        accessSettled.forEach((result) => {
-          if (result.status !== 'fulfilled') return
-          result.value.docs.forEach((d) => {
-            const data = d.data()
-            if (!data.classId || !data.moduleId) return
-            accessRows.push(data)
-          })
-        })
-        const groupRows = groupSettled.flatMap((result) => (
-          result.status === 'fulfilled' ? result.value : []
-        ))
-        const moduleGroupAccessRows = moduleGroupAccessSettled.flatMap((result) => (
-          result.status === 'fulfilled' ? result.value : []
-        ))
-
-        const codeRows = codesSettled[0].status === 'fulfilled'
-          ? codesSettled[0].value.docs.map((d) => ({ code: d.id, ...d.data() }))
-          : []
-        const moduleRows = modulesMetaSettled[0].status === 'fulfilled'
-          ? await modulesMetaSettled[0].value.json()
-          : []
-        const moduleMetaById = {}
-        ;(Array.isArray(moduleRows) ? moduleRows : []).forEach((moduleItem) => {
-          if (!moduleItem?.id) return
-          moduleMetaById[moduleItem.id] = moduleItem
-        })
-
-        const cards = buildStudentClassCards({
-          accessRows,
-          classDocs,
-          classNameByClassId,
-          codeRows,
-          enrollments,
-          groupRows,
-          moduleGroupAccessRows,
-          moduleMapByClass,
-          moduleMetaById,
-          studentEmail: email,
-        })
-        setClassCards(cards)
+        const cards = await apiFetch('/student/dashboard', { user: currentUser })
+        const normalized = (Array.isArray(cards) ? cards : []).map((card) => ({
+          id: card.id,
+          name: card.name,
+          teacherName: card.teacher_name ?? card.teacherName ?? null,
+          modules: (card.modules || []).map((m) => ({
+            moduleId: m.moduleId ?? m.module_id,
+            moduleName: m.moduleName ?? m.module_name ?? 'Module',
+            moduleDescription: m.moduleDescription ?? m.module_description ?? null,
+            moduleStatus: m.moduleStatus ?? m.module_status ?? 'active',
+            unlocked: Boolean(m.unlocked),
+            courseCode: m.courseCode ?? m.course_code ?? null,
+          })),
+        }))
+        setClassCards(normalized)
       } catch {
-        setError('Could not fully load your student dashboard. Some class data may be restricted by current Firebase rules.')
+        setError('Could not fully load your student dashboard. Please try again.')
       } finally {
         setLoading(false)
       }
@@ -220,15 +108,15 @@ export default function StudentDashboard({ currentUser, onLogout }) {
                     ? 'Not activated yet'
                     : `${unlockedCount}/${totalCount} unlocked`
                   return (
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">{classCard.name}</h3>
-                    {classCard.teacherName && (
-                      <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Teacher: {classCard.teacherName}</p>
-                    )}
-                  </div>
-                  <Badge tone="neutral">{badgeText}</Badge>
-                </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">{classCard.name}</h3>
+                        {classCard.teacherName && (
+                          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Teacher: {classCard.teacherName}</p>
+                        )}
+                      </div>
+                      <Badge tone="neutral">{badgeText}</Badge>
+                    </div>
                   )
                 })()}
 

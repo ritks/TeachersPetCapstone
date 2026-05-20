@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import { collection, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
-import { db } from '../../firebase'
 import DocumentPanel from './DocumentPanel'
 import { Badge, Button, Input } from '../ui/primitives'
 import { apiUrl } from '../../lib/api'
+import { apiFetch } from '../../lib/apiAuth'
 
 export default function TeacherSidebar({
   open,
@@ -29,13 +28,11 @@ export default function TeacherSidebar({
     if (!currentUser || modules.length === 0) return
 
     const fetchCodes = async () => {
-      const q = query(
-        collection(db, 'courseCodes'),
-        where('teacherUid', '==', currentUser.uid),
-      )
-      const snap = await getDocs(q)
+      const rows = await apiFetch(`/course-codes?teacher_uid=${encodeURIComponent(currentUser.uid)}`, {
+        user: currentUser,
+      })
       const map = {}
-      snap.docs.forEach((d) => { map[d.data().moduleId] = d.id })
+      ;(Array.isArray(rows) ? rows : []).forEach((row) => { map[row.module_id] = row.code })
       setCourseCodes(map)
     }
 
@@ -74,12 +71,15 @@ export default function TeacherSidebar({
     setGeneratingFor(mod.id)
     try {
       const code = await createUniqueCode()
-      await setDoc(doc(db, 'courseCodes', code), {
-        moduleId: mod.id,
-        moduleName: mod.name,
-        teacherUid: currentUser?.uid ?? null,
-        teacherName: currentUser?.displayName || currentUser?.email || null,
-        createdAt: serverTimestamp(),
+      await apiFetch('/course-codes', {
+        user: currentUser,
+        method: 'POST',
+        body: {
+          code,
+          module_id: mod.id,
+          module_name: mod.name,
+          teacher_name: currentUser?.displayName || currentUser?.email || null,
+        },
       })
       setCourseCodes((prev) => ({ ...prev, [mod.id]: code }))
     } catch (err) {
