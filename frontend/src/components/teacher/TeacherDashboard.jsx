@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import AnalyticsDashboard from '../AnalyticsDashboard'
-import { addDoc, collection, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
-import { db } from '../../firebase'
 import { Badge, Button, Card, Input, Panel, StatCard } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
 import { apiUrl } from '../../lib/api'
+import { apiFetch } from '../../lib/apiAuth'
 import DocumentPanel from './DocumentPanel'
 import ThemeToggleButton from '../common/ThemeToggleButton'
 
@@ -148,15 +147,16 @@ function ClassManagementPanel({ currentUser }) {
     setErrorMessage('')
     setInfoMessage('')
     try {
+      const uid = encodeURIComponent(currentUser.uid)
       const settled = await Promise.allSettled([
-        fetch(apiUrl(`/modules?teacher_uid=${encodeURIComponent(currentUser.uid)}`)),
-        getDocs(query(collection(db, 'teacherClasses'), where('teacherUid', '==', currentUser.uid))),
-        getDocs(query(collection(db, 'classModules'), where('teacherUid', '==', currentUser.uid))),
-        getDocs(query(collection(db, 'prompts'), where('teacherUid', '==', currentUser.uid))),
-        getDocs(query(collection(db, 'classStudents'), where('teacherUid', '==', currentUser.uid))),
-        getDocs(query(collection(db, 'moduleAccess'), where('teacherUid', '==', currentUser.uid))),
-        getDocs(query(collection(db, 'classGroups'), where('teacherUid', '==', currentUser.uid))),
-        getDocs(query(collection(db, 'moduleGroupAccess'), where('teacherUid', '==', currentUser.uid))),
+        fetch(apiUrl(`/modules?teacher_uid=${uid}`)),
+        apiFetch('/classes', { user: currentUser }),
+        apiFetch(`/class-modules?teacher_uid=${uid}`, { user: currentUser }),
+        apiFetch(`/prompts?teacher_uid=${uid}`, { user: currentUser }),
+        apiFetch(`/class-students?teacher_uid=${uid}`, { user: currentUser }),
+        apiFetch(`/module-access?teacher_uid=${uid}`, { user: currentUser }),
+        apiFetch(`/class-groups?teacher_uid=${uid}`, { user: currentUser }),
+        apiFetch(`/module-group-access?teacher_uid=${uid}`, { user: currentUser }),
       ])
 
       const [
@@ -178,7 +178,16 @@ function ClassManagementPanel({ currentUser }) {
       modules.forEach((mod) => { moduleMap[mod.id] = mod })
 
       const remoteClassItems = classesState.status === 'fulfilled'
-        ? classesState.value.docs.map((d) => ({ id: d.id, ...d.data() }))
+        ? classesState.value.map((c) => ({
+            id: c.id,
+            name: c.name,
+            description: c.description,
+            teacherUid: c.teacher_uid,
+            teacherName: c.teacher_name,
+            createdAt: c.created_at
+              ? { toMillis: () => new Date(c.created_at).getTime() }
+              : null,
+          }))
         : []
       const localClassItems = readLocal(localClassesKey, [])
       const classMap = {}
@@ -193,8 +202,7 @@ function ClassManagementPanel({ currentUser }) {
       setClasses(classItems)
 
       const moduleGroups = {}
-      const classModuleDocs = classModulesState.status === 'fulfilled' ? classModulesState.value.docs : []
-      const remoteLinks = classModuleDocs.map((d) => ({ id: d.id, ...d.data() }))
+      const remoteLinks = classModulesState.status === 'fulfilled' ? classModulesState.value : []
       const localLinks = readLocal(localLinksKey, [])
       const allLinks = [...remoteLinks, ...localLinks]
       allLinks.forEach((data) => {
@@ -211,9 +219,7 @@ function ClassManagementPanel({ currentUser }) {
       })
       setModulesByClass(moduleGroups)
 
-      const remoteStudents = studentsState.status === 'fulfilled'
-        ? studentsState.value.docs.map((d) => ({ id: d.id, ...d.data() }))
-        : []
+      const remoteStudents = studentsState.status === 'fulfilled' ? studentsState.value : []
       const localStudents = readLocal(localStudentsKey, [])
       const allStudents = [...remoteStudents, ...localStudents]
       const studentMapByClass = {}
@@ -225,9 +231,7 @@ function ClassManagementPanel({ currentUser }) {
       })
       setStudentsByClass(studentMapByClass)
 
-      const remoteAccess = accessState.status === 'fulfilled'
-        ? accessState.value.docs.map((d) => ({ id: d.id, ...d.data() }))
-        : []
+      const remoteAccess = accessState.status === 'fulfilled' ? accessState.value : []
       const localAccess = readLocal(localAccessKey, [])
       const accessMap = {}
       ;[...remoteAccess, ...localAccess].forEach((row) => {
@@ -239,9 +243,7 @@ function ClassManagementPanel({ currentUser }) {
       })
       setModuleAccessByKey(accessMap)
 
-      const remoteGroups = groupsState.status === 'fulfilled'
-        ? groupsState.value.docs.map((d) => ({ id: d.id, ...d.data() }))
-        : []
+      const remoteGroups = groupsState.status === 'fulfilled' ? groupsState.value : []
       const localGroups = readLocal(localGroupsKey, [])
       const groupMap = {}
       ;[...remoteGroups, ...localGroups].forEach((row) => {
@@ -264,9 +266,7 @@ function ClassManagementPanel({ currentUser }) {
       })
       setGroupsByClass(nextGroupsByClass)
 
-      const remoteGroupAccess = groupAccessState.status === 'fulfilled'
-        ? groupAccessState.value.docs.map((d) => ({ id: d.id, ...d.data() }))
-        : []
+      const remoteGroupAccess = groupAccessState.status === 'fulfilled' ? groupAccessState.value : []
       const localGroupAccess = readLocal(localGroupAccessKey, [])
       const groupAccessMap = {}
       ;[...remoteGroupAccess, ...localGroupAccess].forEach((row) => {
@@ -277,7 +277,7 @@ function ClassManagementPanel({ currentUser }) {
       })
       setModuleGroupAccess(groupAccessMap)
 
-      const promptDocs = promptsState.status === 'fulfilled' ? promptsState.value.docs.map((d) => d.data()) : []
+      const promptDocs = promptsState.status === 'fulfilled' ? promptsState.value : []
       const classInsights = {}
       classItems.forEach((classItem) => {
         const classModules = moduleGroups[classItem.id] || []
@@ -289,7 +289,9 @@ function ClassManagementPanel({ currentUser }) {
             .filter(Boolean),
         ).size
         const latestTs = classPrompts.reduce((acc, p) => {
-          const val = p.timestamp?.toMillis?.() ?? 0
+          const val = p.timestamp
+            ? (p.timestamp?.toMillis?.() ?? new Date(p.timestamp).getTime())
+            : 0
           return val > acc ? val : acc
         }, 0)
 
@@ -360,12 +362,10 @@ function ClassManagementPanel({ currentUser }) {
     setInfoMessage('')
     try {
       try {
-        await addDoc(collection(db, 'teacherClasses'), {
-          name,
-          description: newClassDesc.trim() || null,
-          teacherUid: currentUser.uid,
-          teacherName: currentUser.displayName || currentUser.email || null,
-          createdAt: serverTimestamp(),
+        await apiFetch('/classes', {
+          user: currentUser,
+          method: 'POST',
+          body: { name, description: newClassDesc.trim() || null },
         })
       } catch {
         const localClasses = readLocal(localClassesKey, [])
@@ -378,7 +378,7 @@ function ClassManagementPanel({ currentUser }) {
           createdAt: Date.now(),
         }
         writeLocal(localClassesKey, [localClass, ...localClasses])
-        setInfoMessage('Class saved locally (cloud permissions blocked).')
+        setInfoMessage('Class saved locally (API unavailable).')
       }
       setNewClassName('')
       setNewClassDesc('')
@@ -413,14 +413,14 @@ function ClassManagementPanel({ currentUser }) {
       if (created?.id) {
         const classRef = classes.find((c) => c.id === classId)
         try {
-          await addDoc(collection(db, 'classModules'), {
-            classId,
-            className: classRef?.name || null,
-            moduleId: created.id,
-            moduleName: created.name,
-            moduleStatus: 'active',
-            teacherUid: currentUser.uid,
-            createdAt: serverTimestamp(),
+          await apiFetch('/class-modules', {
+            user: currentUser,
+            method: 'POST',
+            body: {
+              class_id: classId,
+              module_id: created.id,
+              module_status: 'active',
+            },
           })
         } catch {
           const localLinks = readLocal(localLinksKey, [])
@@ -508,10 +508,15 @@ function ClassManagementPanel({ currentUser }) {
     try {
       try {
         if (moduleItem.classModuleDocId && !String(moduleItem.classModuleDocId).startsWith('local-')) {
-          await setDoc(doc(db, 'classModules', moduleItem.classModuleDocId), {
-            moduleStatus: nextStatus,
-            updatedAt: serverTimestamp(),
-          }, { merge: true })
+          await apiFetch(`/class-modules/${moduleItem.classModuleDocId}`, {
+            user: currentUser,
+            method: 'PUT',
+            body: {
+              class_id: classId,
+              module_id: moduleItem.id,
+              module_status: nextStatus,
+            },
+          })
         } else {
           throw new Error('No remote class module doc available')
         }
@@ -570,16 +575,10 @@ function ClassManagementPanel({ currentUser }) {
     setErrorMessage('')
     try {
       try {
-        const classRef = classes.find((c) => c.id === classId)
-        await addDoc(collection(db, 'classStudents'), {
-          classId,
-          className: classRef?.name || null,
-          teacherUid: currentUser.uid,
-          teacherName: currentUser.displayName || currentUser.email || null,
-          studentEmail: raw,
-          studentUid: null,
-          status: 'invited',
-          createdAt: serverTimestamp(),
+        await apiFetch(`/classes/${classId}/students`, {
+          user: currentUser,
+          method: 'POST',
+          body: { student_email: raw },
         })
       } catch {
         const localStudents = readLocal(localStudentsKey, [])
@@ -619,13 +618,10 @@ function ClassManagementPanel({ currentUser }) {
     setErrorMessage('')
     try {
       try {
-        await addDoc(collection(db, 'classGroups'), {
-          classId,
-          className: classes.find((c) => c.id === classId)?.name || null,
-          teacherUid: currentUser.uid,
-          name,
-          members: [],
-          createdAt: serverTimestamp(),
+        await apiFetch(`/classes/${classId}/groups`, {
+          user: currentUser,
+          method: 'POST',
+          body: { name },
         })
       } catch {
         const localGroups = readLocal(localGroupsKey, [])
@@ -659,14 +655,11 @@ function ClassManagementPanel({ currentUser }) {
 
     try {
       try {
-        await setDoc(doc(db, 'classGroups', groupItem.id), {
-          classId,
-          className: classes.find((c) => c.id === classId)?.name || null,
-          teacherUid: currentUser.uid,
-          name: groupItem.name,
-          members: nextMembers,
-          updatedAt: serverTimestamp(),
-        }, { merge: true })
+        await apiFetch(`/groups/${groupItem.id}/members`, {
+          user: currentUser,
+          method: 'PUT',
+          body: { members: nextMembers },
+        })
       } catch {
         const localGroups = readLocal(localGroupsKey, [])
         const idx = localGroups.findIndex((row) => row.id === groupItem.id)
@@ -720,33 +713,28 @@ function ClassManagementPanel({ currentUser }) {
 
     try {
       try {
-        const accessDocId = `${classId}_${moduleItem.id}`.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 120)
-        await setDoc(doc(db, 'moduleGroupAccess', accessDocId), {
-          classId,
-          className: classes.find((c) => c.id === classId)?.name || null,
-          moduleId: moduleItem.id,
-          moduleName: moduleItem.name || null,
-          teacherUid: currentUser.uid,
-          groupIds: nextGroupIds,
-          updatedAt: serverTimestamp(),
-        }, { merge: true })
+        await apiFetch('/module-group-access', {
+          user: currentUser,
+          method: 'POST',
+          body: {
+            class_id: classId,
+            module_id: moduleItem.id,
+            group_ids: nextGroupIds,
+          },
+        })
 
         await Promise.all(
-          groupManagedEmails.map((email) => {
-            const docId = `${classId}_${moduleItem.id}_${email.replace(/[^a-zA-Z0-9]/g, '_')}`.slice(0, 120)
-            return setDoc(doc(db, 'moduleAccess', docId), {
-              classId,
-              className: classes.find((c) => c.id === classId)?.name || null,
-              moduleId: moduleItem.id,
-              moduleName: moduleItem.name || null,
-              teacherUid: currentUser.uid,
-              studentEmail: email,
-              isUnlocked: allowedEmails.has(email),
+          groupManagedEmails.map((email) => apiFetch('/module-access', {
+            user: currentUser,
+            method: 'POST',
+            body: {
+              class_id: classId,
+              module_id: moduleItem.id,
+              student_email: email,
+              is_unlocked: allowedEmails.has(email),
               source: 'group',
-              updatedAt: serverTimestamp(),
-              unlockedAt: allowedEmails.has(email) ? serverTimestamp() : null,
-            }, { merge: true })
-          }),
+            },
+          })),
         )
       } catch {
         const localGroupAccess = readLocal(localGroupAccessKey, [])
@@ -815,22 +803,20 @@ function ClassManagementPanel({ currentUser }) {
     const existing = moduleAccessByKey[key]
     const currentUnlocked = existing?.source === 'manual' ? Boolean(existing.isUnlocked) : groupDerivedUnlocked
     const nextUnlocked = !currentUnlocked
-    const docId = `${classId}_${moduleItem.id}_${studentEmail.replace(/[^a-zA-Z0-9]/g, '_')}`.slice(0, 120)
 
     try {
       try {
-        await setDoc(doc(db, 'moduleAccess', docId), {
-          classId,
-          className: classes.find((c) => c.id === classId)?.name || null,
-          moduleId: moduleItem.id,
-          moduleName: moduleItem.name || null,
-          teacherUid: currentUser.uid,
-          studentEmail,
-          isUnlocked: nextUnlocked,
-          source: 'manual',
-          updatedAt: serverTimestamp(),
-          unlockedAt: nextUnlocked ? serverTimestamp() : null,
-        }, { merge: true })
+        await apiFetch('/module-access', {
+          user: currentUser,
+          method: 'POST',
+          body: {
+            class_id: classId,
+            module_id: moduleItem.id,
+            student_email: studentEmail,
+            is_unlocked: nextUnlocked,
+            source: 'manual',
+          },
+        })
       } catch {
         const localAccess = readLocal(localAccessKey, [])
         const idx = localAccess.findIndex((row) => row.classId === classId && row.moduleId === moduleItem.id && row.studentEmail === studentEmail)
@@ -1435,26 +1421,26 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
       if (!currentUser?.uid) return
 
       try {
-        const [moduleRes, classesSnap, studentsSnap, classModulesSnap] = await Promise.all([
-          fetch(apiUrl(`/modules?teacher_uid=${encodeURIComponent(currentUser.uid)}`)),
-          getDocs(query(collection(db, 'teacherClasses'), where('teacherUid', '==', currentUser.uid))),
-          getDocs(query(collection(db, 'classStudents'), where('teacherUid', '==', currentUser.uid))),
-          getDocs(query(collection(db, 'classModules'), where('teacherUid', '==', currentUser.uid))),
+        const uid = encodeURIComponent(currentUser.uid)
+        const [moduleRes, classRows, studentRows, classModuleRows] = await Promise.all([
+          fetch(apiUrl(`/modules?teacher_uid=${uid}`)),
+          apiFetch('/classes', { user: currentUser }),
+          apiFetch(`/class-students?teacher_uid=${uid}`, { user: currentUser }),
+          apiFetch(`/class-modules?teacher_uid=${uid}`, { user: currentUser }),
         ])
 
         const moduleData = await moduleRes.json()
         const knownModules = Array.isArray(moduleData) ? moduleData : []
         const knownModuleIds = new Set(knownModules.map((m) => m.id).filter(Boolean))
         const linkedModuleIds = new Set(
-          classModulesSnap.docs
-            .map((d) => d.data()?.moduleId)
+          (Array.isArray(classModuleRows) ? classModuleRows : [])
+            .map((row) => row.moduleId)
             .filter((moduleId) => moduleId && (!knownModuleIds.size || knownModuleIds.has(moduleId))),
         )
         const modulesCount = linkedModuleIds.size
-        const classesCount = classesSnap.size
+        const classesCount = Array.isArray(classRows) ? classRows.length : 0
         const uniqueStudents = new Set(
-          studentsSnap.docs
-            .map((d) => d.data())
+          (Array.isArray(studentRows) ? studentRows : [])
             .map((row) => row.studentUid || row.studentEmail)
             .filter(Boolean),
         ).size

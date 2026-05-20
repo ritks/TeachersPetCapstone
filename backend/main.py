@@ -399,6 +399,12 @@ def get_current_user_uid(authorization: Optional[str] = Header(default=None)) ->
     return _verify_firebase_token(token)
 
 
+from routes import postgres_data  # noqa: E402
+
+postgres_data.configure_auth(get_current_user_uid, get_optional_user_uid)
+app.include_router(postgres_data.router)
+
+
 # ── Startup ───────────────────────────────────────────────────────────
 @app.on_event("startup")
 def on_startup():

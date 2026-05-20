@@ -2,12 +2,6 @@ import { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkMath from 'remark-math'
-import {
-  collection,
-  addDoc,
-  serverTimestamp,
-} from 'firebase/firestore'
-import { db } from '../../firebase'
 import { CHAT_COPY } from '../../content/strings'
 import { getSpeechSynthesis, stripForSpeech, pickBestVoice, loadVoices } from '../../lib/speech'
 import { apiUrl } from '../../lib/api'
@@ -471,18 +465,21 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
       if (onCitationsChange && citations.length > 0) onCitationsChange(citations)
 
       if (userType === 'student' && studentData) {
-        addDoc(collection(db, 'prompts'), {
-          courseCode: studentData.courseCode ?? null,
-          moduleId: selectedModuleId ?? null,
-          moduleName: studentData.moduleName ?? null,
-          teacherUid: studentData.teacherUid ?? null,
-          sessionId: data.session_id,
-          prompt: question,
-          response: data.answer,
-          flagCategory: data.flag_category ?? null,
-          flagSeverity: data.flag_severity ?? null,
-          timestamp: serverTimestamp(),
-        }).catch(() => { /* swallow */ })
+        fetch(apiUrl('/prompts'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            teacher_uid: studentData.teacherUid ?? null,
+            course_code: studentData.courseCode ?? null,
+            module_id: selectedModuleId ?? null,
+            module_name: studentData.moduleName ?? null,
+            session_id: data.session_id,
+            prompt: question,
+            response: data.answer,
+            flag_category: data.flag_category ?? null,
+            flag_severity: data.flag_severity ?? null,
+          }),
+        }).catch(() => {})
       }
     } catch {
       const errMessages = [
@@ -496,18 +493,21 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
       setMessages(errMessages)
       if (onMessagesUpdate) onMessagesUpdate(errMessages, sessionId)
       if (userType === 'student' && studentData) {
-        addDoc(collection(db, 'prompts'), {
-          courseCode: studentData.courseCode ?? null,
-          moduleId: selectedModuleId ?? null,
-          moduleName: studentData.moduleName ?? null,
-          teacherUid: studentData.teacherUid ?? null,
-          sessionId: sessionId ?? null,
-          prompt: question,
-          response: CHAT_COPY.serverError,
-          flagCategory: 'system_error',
-          flagSeverity: 'high',
-          timestamp: serverTimestamp(),
-        }).catch(() => { /* swallow */ })
+        fetch(apiUrl('/prompts'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            teacher_uid: studentData.teacherUid ?? null,
+            course_code: studentData.courseCode ?? null,
+            module_id: selectedModuleId ?? null,
+            module_name: studentData.moduleName ?? null,
+            session_id: sessionId ?? null,
+            prompt: question,
+            response: CHAT_COPY.serverError,
+            flag_category: 'system_error',
+            flag_severity: 'high',
+          }),
+        }).catch(() => {})
       }
     } finally {
       setLoading(false)

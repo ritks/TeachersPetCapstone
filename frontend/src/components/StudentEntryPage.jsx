@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { doc, getDoc } from 'firebase/firestore'
-import { db } from '../firebase'
 import { STUDENT_ENTRY_COPY } from '../content/strings'
+import { apiUrl } from '../lib/api'
 import { AppShell, Button, Input, Panel } from './ui/primitives'
 import LogoMark from './common/LogoMark'
 import { useStudent } from '../contexts/StudentContext'
@@ -22,13 +21,20 @@ export default function StudentEntryPage({ onSuccess, embedded = false }) {
     setError('')
     setLoading(true)
     try {
-      const snap = await getDoc(doc(db, 'courseCodes', trimmed))
-      if (!snap.exists()) {
+      const res = await fetch(apiUrl(`/course-codes/${encodeURIComponent(trimmed)}`))
+      if (res.status === 404) {
         setError(STUDENT_ENTRY_COPY.invalidCode)
         return
       }
-      const { moduleId, moduleName, teacherUid, teacherName } = snap.data()
-      const studentData = { courseCode: trimmed, moduleId, moduleName, teacherUid: teacherUid ?? null, teacherName: teacherName ?? null }
+      const data = await res.json()
+      if (!res.ok) throw new Error('Course code lookup failed')
+      const studentData = {
+        courseCode: trimmed,
+        moduleId: data.module_id,
+        moduleName: data.module_name,
+        teacherUid: data.teacher_uid ?? null,
+        teacherName: data.teacher_name ?? null,
+      }
       setStudentData(studentData)
       onSuccess?.(studentData)
       navigate('/student')

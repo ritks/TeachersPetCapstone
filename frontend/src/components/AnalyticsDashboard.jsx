@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, getDocs, query, where } from 'firebase/firestore'
-import { db } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { apiUrl } from '../lib/api'
+import { apiFetch } from '../lib/apiAuth'
 import { Badge, StatCard } from './ui/primitives'
 
 function fmtTime(ts) {
@@ -106,15 +105,10 @@ export default function AnalyticsDashboard() {
       setLoading(true)
       setError(null)
       try {
-        const q = query(collection(db, 'prompts'), where('teacherUid', '==', currentUser.uid))
-        const snap = await getDocs(q)
-        const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-        docs.sort((a, b) => {
-          const ta = a.timestamp?.toMillis?.() ?? 0
-          const tb = b.timestamp?.toMillis?.() ?? 0
-          return tb - ta
+        const docs = await apiFetch(`/prompts?teacher_uid=${encodeURIComponent(currentUser.uid)}`, {
+          user: currentUser,
         })
-        setPrompts(docs)
+        setPrompts(Array.isArray(docs) ? docs : [])
       } catch (err) {
         console.error('Analytics fetch failed:', err)
         setError(err.message)
