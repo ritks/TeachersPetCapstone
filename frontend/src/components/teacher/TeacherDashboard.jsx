@@ -79,6 +79,9 @@ function ClassManagementPanel({ currentUser }) {
   const [deletingModuleId, setDeletingModuleId] = useState(null)
   const [moduleSearchTerm, setModuleSearchTerm] = useState('')
   const [moduleStatusFilter, setModuleStatusFilter] = useState('all')
+  const [classStatusFilter, setClassStatusFilter] = useState('active')
+  const [archivingClassId, setArchivingClassId] = useState(null)
+  const [deletingClassId, setDeletingClassId] = useState(null)
 
   const localClassesKey = currentUser ? `tp_teacher_classes_${currentUser.uid}` : null
   const localLinksKey = currentUser ? `tp_class_modules_${currentUser.uid}` : null
@@ -106,6 +109,15 @@ function ClassManagementPanel({ currentUser }) {
     } catch {
       // noop
     }
+  }
+
+  const purgeLocalClassData = (classId) => {
+    writeLocal(localClassesKey, readLocal(localClassesKey, []).filter((row) => row.id !== classId))
+    writeLocal(localLinksKey, readLocal(localLinksKey, []).filter((row) => row.classId !== classId))
+    writeLocal(localStudentsKey, readLocal(localStudentsKey, []).filter((row) => row.classId !== classId))
+    writeLocal(localGroupsKey, readLocal(localGroupsKey, []).filter((row) => row.classId !== classId))
+    writeLocal(localAccessKey, readLocal(localAccessKey, []).filter((row) => row.classId !== classId))
+    writeLocal(localGroupAccessKey, readLocal(localGroupAccessKey, []).filter((row) => row.classId !== classId))
   }
 
   const getModuleDraft = (classId) => moduleDrafts[classId] || { name: '', description: '', open: false }
@@ -193,6 +205,7 @@ function ClassManagementPanel({ currentUser }) {
             description: c.description,
             teacherUid: c.teacher_uid,
             teacherName: c.teacher_name,
+            status: c.status || 'active',
             createdAt: c.created_at
               ? { toMillis: () => new Date(c.created_at).getTime() }
               : null,
@@ -381,6 +394,7 @@ function ClassManagementPanel({ currentUser }) {
           description: newClassDesc.trim() || null,
           teacherUid: currentUser.uid,
           teacherName: currentUser.displayName || currentUser.email || null,
+          status: 'active',
           createdAt: Date.now(),
         }
         writeLocal(localClassesKey, [localClass, ...localClasses])
@@ -394,6 +408,104 @@ function ClassManagementPanel({ currentUser }) {
       setErrorMessage('Could not create class. Please try again.')
     } finally {
       setCreatingClass(false)
+    }
+  }
+
+  const handleToggleClassArchive = async (classItem) => {
+    if (!currentUser || !classItem?.id) return
+    const nextStatus = (classItem.status || 'active') === 'archived' ? 'active' : 'archived'
+
+    setArchivingClassId(classItem.id)
+    setErrorMessage('')
+    setInfoMessage('')
+
+    try {
+      try {
+        if (!String(classItem.id).startsWith('local-')) {
+          await apiFetch(`/classes/${classItem.id}`, {
+            user: currentUser,
+            method: 'PUT',
+            body: { status: nextStatus },
+          })
+        } else {
+          throw new Error('Local class')
+        }
+      } catch {
+        const localClasses = readLocal(localClassesKey, [])
+        const idx = localClasses.findIndex((row) => row.id === classItem.id)
+        if (idx >= 0) {
+          localClasses[idx] = { ...localClasses[idx], status: nextStatus, updatedAt: Date.now() }
+          writeLocal(localClassesKey, localClasses)
+        }
+        setInfoMessage('Class status saved locally (API unavailable).')
+      }
+
+      setClasses((prev) => prev.map((row) => (
+        row.id === classItem.id ? { ...row, status: nextStatus } : row
+      )))
+
+      if (nextStatus === 'archived' && selectedClassId === classItem.id) {
+        setSelectedClassId(null)
+      }
+    } catch {
+      setErrorMessage('Could not update class archive status.')
+    } finally {
+      setArchivingClassId(null)
+    }
+  }
+
+  const handleDeleteClass = async (classItem) => {
+    if (!currentUser || !classItem?.id) return
+    if (!window.confirm(
+      `Delete class "${classItem.name}"? This removes roster, groups, and module links. Module content is kept. This cannot be undone.`,
+    )) return
+
+    setDeletingClassId(classItem.id)
+    setErrorMessage('')
+    setInfoMessage('')
+
+    try {
+      const isLocal = String(classItem.id).startsWith('local-')
+      if (isLocal) {
+        purgeLocalClassData(classItem.id)
+        setInfoMessage('Class removed locally.')
+      } else {
+        await apiFetch(`/classes/${classItem.id}`, {
+          user: currentUser,
+          method: 'DELETE',
+        })
+        purgeLocalClassData(classItem.id)
+      }
+
+      setClasses((prev) => prev.filter((row) => row.id !== classItem.id))
+      setModulesByClass((prev) => {
+        const next = { ...prev }
+        delete next[classItem.id]
+        return next
+      })
+      setStudentsByClass((prev) => {
+        const next = { ...prev }
+        delete next[classItem.id]
+        return next
+      })
+      setGroupsByClass((prev) => {
+        const next = { ...prev }
+        delete next[classItem.id]
+        return next
+      })
+      setInsightsByClass((prev) => {
+        const next = { ...prev }
+        delete next[classItem.id]
+        return next
+      })
+
+      if (selectedClassId === classItem.id) {
+        setSelectedClassId(null)
+      }
+    } catch {
+      setErrorMessage('Could not delete class.')
+    } finally {
+      setDeletingClassId(null)
     }
   }
 
@@ -1187,6 +1299,47 @@ function ClassManagementPanel({ currentUser }) {
     return `Last activity ${new Date(tsMillis).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`
   }
 
+  const filteredClasses = classes.filter((classItem) => {
+    const status = classItem.status || 'active'
+    if (classStatusFilter === 'all') return true
+    return status === classStatusFilter
+  })
+
+  const renderClassActions = (classItem, { compact = false } = {}) => (
+    <div
+      className={[
+        'flex items-center gap-1.5',
+        compact ? 'flex-wrap' : 'flex-shrink-0',
+      ].join(' ')}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      role="presentation"
+    >
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        disabled={archivingClassId === classItem.id || deletingClassId === classItem.id}
+        onClick={() => handleToggleClassArchive(classItem)}
+      >
+        {archivingClassId === classItem.id
+          ? 'Updating...'
+          : (classItem.status || 'active') === 'archived'
+            ? 'Restore'
+            : 'Archive'}
+      </Button>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        disabled={deletingClassId === classItem.id || archivingClassId === classItem.id}
+        onClick={() => handleDeleteClass(classItem)}
+      >
+        {deletingClassId === classItem.id ? 'Deleting...' : 'Delete'}
+      </Button>
+    </div>
+  )
+
   return (
     <Panel className="p-5 md:p-6 tp-card-surface border-[var(--color-border-card-subtle)] backdrop-blur-sm">
       <div className="flex items-start justify-between gap-4 mb-5">
@@ -1241,15 +1394,44 @@ function ClassManagementPanel({ currentUser }) {
       ) : (
         <>
           {!selectedClassId ? (
+            <>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-[var(--color-text-secondary)]">
+                  {filteredClasses.length} {classStatusFilter === 'all' ? '' : `${classStatusFilter} `}class{filteredClasses.length === 1 ? '' : 'es'}
+                </p>
+                <label className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
+                  Show
+                  <select
+                    value={classStatusFilter}
+                    onChange={(e) => setClassStatusFilter(e.target.value)}
+                    className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/80 px-2.5 py-1.5 text-sm text-[var(--color-text-primary)]"
+                  >
+                    <option value="active">Active</option>
+                    <option value="archived">Archived</option>
+                    <option value="all">All</option>
+                  </select>
+                </label>
+              </div>
+              {filteredClasses.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-[rgba(65,90,119,0.3)] bg-white/55 p-6 text-sm text-[var(--color-text-secondary)]">
+                  {classStatusFilter === 'archived'
+                    ? 'No archived classes. Archive a class to hide it from your active list.'
+                    : 'No classes match this filter.'}
+                </div>
+              ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {classes.map((classItem) => {
+              {filteredClasses.map((classItem) => {
                 const insight = insightsByClass[classItem.id] || { modules: 0, activeStudents: 0, totalPrompts: 0 }
+                const isArchived = (classItem.status || 'active') === 'archived'
                 return (
                   <Card
                     key={classItem.id}
-                    interactive
-                    onClick={() => setSelectedClassId(classItem.id)}
-                    className="p-5 border-[var(--color-border-card-subtle)] tp-card-surface cursor-pointer hover:-translate-y-0.5 transition-all"
+                    interactive={!isArchived}
+                    onClick={() => !isArchived && setSelectedClassId(classItem.id)}
+                    className={[
+                      'p-5 border-[var(--color-border-card-subtle)] tp-card-surface transition-all',
+                      isArchived ? 'opacity-80' : 'cursor-pointer hover:-translate-y-0.5',
+                    ].join(' ')}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -1258,7 +1440,9 @@ function ClassManagementPanel({ currentUser }) {
                           <p className="text-sm text-[var(--color-text-secondary)] mt-1 line-clamp-2">{classItem.description}</p>
                         )}
                       </div>
-                      <Badge tone="brand">Class</Badge>
+                      <Badge tone={isArchived ? 'warning' : 'brand'}>
+                        {isArchived ? 'Archived' : 'Class'}
+                      </Badge>
                     </div>
                     <div className="grid grid-cols-3 gap-2.5 mt-4">
                       <div className="rounded-xl border border-[var(--color-border-card-subtle)] tp-card-surface-soft px-3 py-2.5">
@@ -1274,11 +1458,20 @@ function ClassManagementPanel({ currentUser }) {
                         <p className="text-[1.35rem] leading-none font-semibold text-[var(--color-text-primary)] mt-1">{insight.totalPrompts}</p>
                       </div>
                     </div>
-                    <p className="text-sm font-semibold text-[var(--color-brand-600)] mt-4">Open Course →</p>
+                    <div className="mt-4 flex items-center justify-between gap-3">
+                      {!isArchived ? (
+                        <p className="text-sm font-semibold text-[var(--color-brand-600)]">Open Course →</p>
+                      ) : (
+                        <p className="text-sm text-[var(--color-text-muted)]">Restore to reopen this class.</p>
+                      )}
+                      {renderClassActions(classItem, { compact: true })}
+                    </div>
                   </Card>
                 )
               })}
             </div>
+              )}
+            </>
           ) : (
             (() => {
               const classItem = classes.find((c) => c.id === selectedClassId)
@@ -1317,7 +1510,12 @@ function ClassManagementPanel({ currentUser }) {
                           <p className="text-sm text-[var(--color-text-secondary)] mt-1 line-clamp-2">{classItem.description}</p>
                         )}
                       </div>
-                      <Badge tone="brand">Class</Badge>
+                      <div className="flex flex-col items-end gap-2">
+                        <Badge tone={(classItem.status || 'active') === 'archived' ? 'warning' : 'brand'}>
+                          {(classItem.status || 'active') === 'archived' ? 'Archived' : 'Class'}
+                        </Badge>
+                        {renderClassActions(classItem)}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-3 gap-2 mt-4">

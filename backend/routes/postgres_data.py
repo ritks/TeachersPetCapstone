@@ -89,6 +89,7 @@ class ClassResponse(BaseModel):
     description: Optional[str] = None
     teacher_uid: str
     teacher_name: Optional[str] = None
+    status: Optional[str] = "active"
     created_at: str
     updated_at: str
 
@@ -96,6 +97,10 @@ class ClassResponse(BaseModel):
 class ClassCreate(BaseModel):
     name: str
     description: Optional[str] = None
+
+
+class ClassUpdate(BaseModel):
+    status: Optional[str] = None
 
 
 class ClassModuleLink(BaseModel):
@@ -366,6 +371,7 @@ def list_classes(db: Session = Depends(get_db), uid: str = Depends(require_uid))
             description=r.description,
             teacher_uid=r.teacher_uid,
             teacher_name=r.teacher_name,
+            status=r.status or "active",
             created_at=_iso(r.created_at),
             updated_at=_iso(r.updated_at),
         )
@@ -394,9 +400,55 @@ def create_class(body: ClassCreate, db: Session = Depends(get_db), uid: str = De
         description=row.description,
         teacher_uid=row.teacher_uid,
         teacher_name=row.teacher_name,
+        status=row.status or "active",
         created_at=_iso(row.created_at),
         updated_at=_iso(row.updated_at),
     )
+
+
+@router.put("/classes/{class_id}", response_model=ClassResponse)
+def update_class(
+    class_id: str,
+    body: ClassUpdate,
+    db: Session = Depends(get_db),
+    uid: str = Depends(require_uid),
+):
+    row = db.query(TeacherClass).filter(TeacherClass.id == class_id, TeacherClass.teacher_uid == uid).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Class not found")
+    if body.status is not None:
+        status = body.status.strip().lower()
+        if status not in ("active", "archived"):
+            raise HTTPException(status_code=400, detail="status must be active or archived")
+        row.status = status
+    db.commit()
+    db.refresh(row)
+    return ClassResponse(
+        id=row.id,
+        name=row.name,
+        description=row.description,
+        teacher_uid=row.teacher_uid,
+        teacher_name=row.teacher_name,
+        status=row.status or "active",
+        created_at=_iso(row.created_at),
+        updated_at=_iso(row.updated_at),
+    )
+
+
+@router.delete("/classes/{class_id}")
+def delete_class(class_id: str, db: Session = Depends(get_db), uid: str = Depends(require_uid)):
+    row = db.query(TeacherClass).filter(TeacherClass.id == class_id, TeacherClass.teacher_uid == uid).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Class not found")
+
+    db.query(ClassModule).filter(ClassModule.class_id == class_id, ClassModule.teacher_uid == uid).delete()
+    db.query(ClassStudent).filter(ClassStudent.class_id == class_id, ClassStudent.teacher_uid == uid).delete()
+    db.query(ClassGroup).filter(ClassGroup.class_id == class_id, ClassGroup.teacher_uid == uid).delete()
+    db.query(ModuleAccess).filter(ModuleAccess.class_id == class_id, ModuleAccess.teacher_uid == uid).delete()
+    db.query(ModuleGroupAccess).filter(ModuleGroupAccess.class_id == class_id, ModuleGroupAccess.teacher_uid == uid).delete()
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/class-modules")
@@ -745,6 +797,8 @@ def student_dashboard(db: Session = Depends(get_db), student_uid: str = Depends(
     cards = []
     for class_id in class_ids:
         cls = classes.get(class_id)
+        if not cls or (cls.status or "active") == "archived":
+            continue
         links = db.query(ClassModule).filter(ClassModule.class_id == class_id).all()
         modules = []
         for link in links:
