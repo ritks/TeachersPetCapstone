@@ -30,7 +30,22 @@ def get_db():
         db.close()
 
 
+def _migrate_teacher_class_status():
+    """Add status column to teacher_classes when upgrading an existing database."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if "teacher_classes" not in inspector.get_table_names():
+        return
+    columns = {col["name"] for col in inspector.get_columns("teacher_classes")}
+    if "status" in columns:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE teacher_classes ADD COLUMN status VARCHAR(32) DEFAULT 'active'"))
+
+
 def init_db():
     from . import models  # noqa: F401 — ensure models are registered
     from . import app_models  # noqa: F401 — Firestore-migrated tables
     Base.metadata.create_all(bind=engine)
+    _migrate_teacher_class_status()

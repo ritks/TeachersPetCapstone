@@ -65,6 +65,7 @@ class TeacherClass(Base):
     description = Column(Text, nullable=True)
     teacher_uid = Column(String, nullable=False, index=True)
     teacher_name = Column(String(255), nullable=True)
+    status = Column(String(32), nullable=True, default="active")
     created_at = Column(DateTime, default=_utcnow, index=True)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
