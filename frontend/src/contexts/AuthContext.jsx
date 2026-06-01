@@ -44,10 +44,10 @@ export function AuthProvider({ children }) {
     return unsubscribe
   }, [])
 
-  const _syncProfile = async (user, roleHint = null) => {
+  const _syncProfile = async (user, roleHint = null, displayNameOverride = null) => {
     const body = {
       email: user.email || null,
-      display_name: user.displayName || null,
+      display_name: displayNameOverride ?? user.displayName ?? null,
     }
     if (roleHint) body.role = roleHint
     const data = await apiFetch('/me', { user, method: 'PUT', body })
@@ -73,7 +73,7 @@ export function AuthProvider({ children }) {
     if (displayName) {
       await updateProfile(cred.user, { displayName })
     }
-    const profile = await _syncProfile({ ...cred.user, displayName }, roleHint)
+    const profile = await _syncProfile(cred.user, roleHint, displayName?.trim() || null)
     setCurrentUser(cred.user)
     setCurrentUserRole(profile?.role || null)
     setCurrentUserProfile(profile)
