@@ -70,6 +70,16 @@ function getLearnerKey(promptRow) {
   return promptRow.studentEmail || promptRow.studentUid || promptRow.courseCode || promptRow.sessionId || null
 }
 
+function getStudentLabel(row) {
+  if (row.studentEmail) return row.studentEmail
+  if (row.studentUid) {
+    return looksLikeOpaqueId(row.studentUid)
+      ? `${row.studentUid.slice(0, 8)}…`
+      : row.studentUid
+  }
+  return 'Unknown'
+}
+
 function tokenize(text) {
   return String(text || '')
     .toLowerCase()
@@ -409,7 +419,7 @@ export default function AnalyticsDashboard() {
                 type="search"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Prompt, response, module, code…"
+                placeholder="Prompt, response, module, student…"
                 className="tp-input w-full min-w-0"
               />
             </label>
@@ -435,7 +445,7 @@ export default function AnalyticsDashboard() {
                   <thead className="sticky top-0 bg-[var(--bg-frosted-muted)] backdrop-blur-sm border-b border-[var(--color-border-card-subtle)]">
                     <tr>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-36">Time</th>
-                      <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-28">Code</th>
+                      <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-44">User</th>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-40">Module</th>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-40">Category</th>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-32">Status</th>
@@ -449,7 +459,7 @@ export default function AnalyticsDashboard() {
                       return (
                         <tr key={row.id} className={idx % 2 === 0 ? 'bg-white/75 hover:bg-[var(--bg-hover)]' : 'bg-[var(--color-bg-muted)] hover:bg-[var(--bg-hover)]'}>
                           <td className="px-3 py-2.5 text-[var(--color-text-muted)] whitespace-nowrap">{fmtTime(row.timestamp)}</td>
-                          <td className="px-3 py-2.5 text-[var(--color-text-secondary)] font-mono whitespace-nowrap">{row.courseCode || '—'}</td>
+                          <td className="px-3 py-2.5 text-[var(--color-text-secondary)] whitespace-nowrap" title={row.studentUid || undefined}>{getStudentLabel(row)}</td>
                           <td className="px-3 py-2.5 text-[var(--color-text-secondary)] whitespace-nowrap">{row.moduleName || (row.moduleId ? `${row.moduleId.slice(0, 8)}…` : '—')}</td>
                           <td className="px-3 py-2.5">
                             <CategoryBadge label={row.flagMeta.label} flagged={row.flagMeta.flagged} />
