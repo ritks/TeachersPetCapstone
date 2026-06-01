@@ -14,9 +14,8 @@ function normalizeTheme(theme) {
   return THEMES.has(theme) ? theme : 'light'
 }
 
-export function ThemeProvider({ children, currentUser, currentUserProfile, authLoading, allowGuestTheme = false }) {
+export function ThemeProvider({ children, currentUser, currentUserProfile, authLoading }) {
   const [refreshedTheme, setRefreshedTheme] = useState(null)
-  const [guestTheme, setGuestTheme] = useState('light')
 
   const refreshedThemeForUser =
     currentUser && refreshedTheme?.uid === currentUser.uid
@@ -24,7 +23,7 @@ export function ThemeProvider({ children, currentUser, currentUserProfile, authL
       : null
   const theme = currentUser
     ? normalizeTheme(refreshedThemeForUser || currentUserProfile?.theme)
-    : (allowGuestTheme ? guestTheme : 'light')
+    : 'light'
 
   useLayoutEffect(() => {
     applyTheme(theme)
@@ -45,8 +44,6 @@ export function ThemeProvider({ children, currentUser, currentUserProfile, authL
     const next = theme === 'light' ? 'dark' : 'light'
     if (currentUser) {
       setRefreshedTheme({ uid: currentUser.uid, theme: next })
-    } else if (allowGuestTheme) {
-      setGuestTheme(next)
     }
     applyTheme(next)
     localStorage.setItem(STORAGE_KEY, next)

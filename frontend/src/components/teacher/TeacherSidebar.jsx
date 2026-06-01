@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import DocumentPanel from './DocumentPanel'
-import { Badge, Button, Input } from '../ui/primitives'
+import { Button, Input } from '../ui/primitives'
 import { apiUrl } from '../../lib/api'
-import { apiFetch } from '../../lib/apiAuth'
 
 export default function TeacherSidebar({
   open,
@@ -14,30 +13,11 @@ export default function TeacherSidebar({
   documents,
   onDocumentsChanged,
   currentUser,
-  createUniqueCode,
 }) {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDesc, setNewDesc] = useState('')
   const [creating, setCreating] = useState(false)
-  const [courseCodes, setCourseCodes] = useState({})
-  const [generatingFor, setGeneratingFor] = useState(null)
-  const [copiedCode, setCopiedCode] = useState(null)
-
-  useEffect(() => {
-    if (!currentUser || modules.length === 0) return
-
-    const fetchCodes = async () => {
-      const rows = await apiFetch(`/course-codes?teacher_uid=${encodeURIComponent(currentUser.uid)}`, {
-        user: currentUser,
-      })
-      const map = {}
-      ;(Array.isArray(rows) ? rows : []).forEach((row) => { map[row.module_id] = row.code })
-      setCourseCodes(map)
-    }
-
-    fetchCodes().catch(() => {})
-  }, [currentUser, modules])
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -65,35 +45,6 @@ export default function TeacherSidebar({
     } finally {
       setCreating(false)
     }
-  }
-
-  const handleGenerateCode = async (mod) => {
-    setGeneratingFor(mod.id)
-    try {
-      const code = await createUniqueCode()
-      await apiFetch('/course-codes', {
-        user: currentUser,
-        method: 'POST',
-        body: {
-          code,
-          module_id: mod.id,
-          module_name: mod.name,
-          teacher_name: currentUser?.displayName || currentUser?.email || null,
-        },
-      })
-      setCourseCodes((prev) => ({ ...prev, [mod.id]: code }))
-    } catch (err) {
-      alert(`Failed to generate code: ${err.message}`)
-    } finally {
-      setGeneratingFor(null)
-    }
-  }
-
-  const copyCode = (code) => {
-    navigator.clipboard.writeText(code).then(() => {
-      setCopiedCode(code)
-      setTimeout(() => setCopiedCode(null), 2000)
-    })
   }
 
   if (!open) {
@@ -157,30 +108,6 @@ export default function TeacherSidebar({
               )}
             </button>
 
-            <div className="px-3 pb-1">
-              {courseCodes[mod.id] ? (
-                <div className="flex items-center gap-1.5">
-                  <Badge tone="brand" className="font-mono tracking-widest">
-                    {courseCodes[mod.id]}
-                  </Badge>
-                  <button
-                    onClick={() => copyCode(courseCodes[mod.id])}
-                    className="text-xs text-gray-400 hover:text-indigo-600 transition-colors"
-                    title="Copy code"
-                  >
-                    {copiedCode === courseCodes[mod.id] ? '✓' : '⧉'}
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => handleGenerateCode(mod)}
-                  disabled={generatingFor === mod.id}
-                  className="text-xs text-indigo-500 hover:text-indigo-700 font-medium disabled:opacity-40 transition-colors"
-                >
-                  {generatingFor === mod.id ? 'Generating…' : '+ Generate Code'}
-                </button>
-              )}
-            </div>
           </div>
         ))}
       </div>

@@ -28,23 +28,11 @@ class UserProfile(Base):
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
-class CourseCode(Base):
-    __tablename__ = "course_codes"
-
-    code = Column(String(16), primary_key=True)
-    module_id = Column(String, ForeignKey("modules.id"), nullable=False, index=True)
-    module_name = Column(String(255), nullable=True)
-    teacher_uid = Column(String, nullable=True, index=True)
-    teacher_name = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=_utcnow, index=True)
-
-
 class PromptLog(Base):
     __tablename__ = "prompt_logs"
 
     id = Column(String, primary_key=True, default=_generate_uuid)
     teacher_uid = Column(String, nullable=True, index=True)
-    course_code = Column(String(16), nullable=True, index=True)
     module_id = Column(String, nullable=True, index=True)
     module_name = Column(String(255), nullable=True)
     session_id = Column(String, nullable=True, index=True)
@@ -94,6 +82,7 @@ class ClassStudent(Base):
     teacher_name = Column(String(255), nullable=True)
     student_email = Column(String(255), nullable=True, index=True)
     student_uid = Column(String, nullable=True, index=True)
+    student_name = Column(String(255), nullable=True)
     status = Column(String(32), nullable=True, default="invited")
     created_at = Column(DateTime, default=_utcnow, index=True)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
@@ -122,6 +111,7 @@ class ModuleGroupAccess(Base):
     module_name = Column(String(255), nullable=True)
     teacher_uid = Column(String, nullable=False, index=True)
     group_ids = Column(JSON, default=list)
+    see_group_ids = Column(JSON, default=list)
     created_at = Column(DateTime, default=_utcnow, index=True)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -137,6 +127,7 @@ class ModuleAccess(Base):
     teacher_uid = Column(String, nullable=False, index=True)
     student_email = Column(String(255), nullable=True, index=True)
     student_uid = Column(String, nullable=True, index=True)
+    can_see = Column(Boolean, default=False, index=True)
     is_unlocked = Column(Boolean, default=False, index=True)
     source = Column(String(16), nullable=True, default="group")
     unlocked_at = Column(DateTime, nullable=True)

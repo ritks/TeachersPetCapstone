@@ -560,7 +560,6 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
           method: 'POST',
           body: {
             teacher_uid: studentData.teacherUid ?? null,
-            course_code: studentData.courseCode ?? null,
             module_id: selectedModuleId ?? null,
             module_name: studentData.moduleName ?? null,
             session_id: data.session_id,
@@ -589,7 +588,6 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
           method: 'POST',
           body: {
             teacher_uid: studentData.teacherUid ?? null,
-            course_code: studentData.courseCode ?? null,
             module_id: selectedModuleId ?? null,
             module_name: studentData.moduleName ?? null,
             session_id: sessionId ?? null,

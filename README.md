@@ -1,6 +1,6 @@
 # Teacher's Pet
 
-An AI-powered math tutoring assistant for K–8 students. Teachers manage modules and course codes; students join via a 6-character code and chat with a Gemini-powered tutor scoped to their class material.
+An AI-powered math tutoring assistant for K–8 students. Teachers manage modules and student access; authenticated students chat with a Gemini-powered tutor scoped to their class material.
 
 ---
 
@@ -41,12 +41,11 @@ TeachersPetCapstone/
 │   │   ├── App.jsx              # URL-based routing (/teacher, /student, /student/module/:id)
 │   │   ├── contexts/
 │   │   │   ├── AuthContext.jsx  # Firebase auth context + useAuth() hook
-│   │   │   └── StudentContext.jsx # Guest/student state, localStorage persistence
+│   │   │   └── StudentContext.jsx # Authenticated student state + module registry
 │   │   └── components/
 │   │       ├── EntryPage.jsx        # Landing — Student / Teacher panels
 │   │       ├── TeacherLoginPage.jsx # Email+password & Google OAuth login
 │   │       ├── StudentLoginPage.jsx # Student email login
-│   │       ├── StudentEntryPage.jsx # Course code entry & Firestore validation
 │   │       ├── student/
 │   │       │   └── StudentDashboard.jsx # Authenticated student class/module view
 │   │       └── AnalyticsDashboard.jsx # Teacher chat log viewer
@@ -93,10 +92,6 @@ service cloud.firestore {
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
-    match /courseCodes/{code} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
     match /prompts/{promptId} {
       allow create: if true;
       allow read: if request.auth != null;
@@ -115,14 +110,7 @@ users/{uid}
   displayName: string
   createdAt: Timestamp
 
-courseCodes/{code}          6-char alphanumeric, teacher-generated
-  moduleId: string
-  moduleName: string
-  teacherUid: string
-  createdAt: Timestamp
-
 prompts/{autoId}            written from frontend after each student AI response
-  courseCode: string
   moduleId: string
   moduleName: string
   teacherUid: string
@@ -217,13 +205,7 @@ Open http://localhost:5173.
 
 ## User Flows
 
-### Student (guest — course code)
-1. Click **I'm a Student** → enter the 6-character course code provided by your teacher.
-2. The code is validated against Firestore `courseCodes/`. If valid, the linked module is stored in `localStorage` and you are redirected to `/student`.
-3. Every prompt and response is logged to Firestore `prompts/` for teacher review.
-4. To leave or switch classes, click **Logout** in the header.
-
-### Student (authenticated)
+### Student
 1. Click **I'm a Student** → sign in with email/password.
 2. Your enrolled classes and unlocked modules are fetched from Firestore.
 3. Click **Open Module** on an unlocked module to start chatting at `/student/module/:id`.
@@ -233,8 +215,7 @@ Open http://localhost:5173.
 2. Your account is saved to Firestore `users/{uid}` on first login.
 3. Create modules in the sidebar — each module is scoped to your account via `teacher_uid`.
 4. Upload PDF or text documents to a module; they are chunked, embedded, and indexed for RAG.
-5. Click **+ Generate Code** on any module to create a shareable 6-character course code stored in Firestore. Use the copy button to share it with students.
-6. Click **Dashboard** in the header to access:
+5. Click **Dashboard** in the header to access:
    - **Overview** — stat cards and feature shortcuts
    - **Analytics** — full log of student prompts and tutor responses, filterable by module
 

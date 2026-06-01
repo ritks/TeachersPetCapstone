@@ -67,7 +67,7 @@ function getFlagMeta(row) {
 }
 
 function getLearnerKey(promptRow) {
-  return promptRow.studentEmail || promptRow.studentUid || promptRow.courseCode || promptRow.sessionId || null
+  return promptRow.studentEmail || promptRow.studentUid || promptRow.sessionId || null
 }
 
 function tokenize(text) {
@@ -162,7 +162,6 @@ export default function AnalyticsDashboard() {
           row.response,
           row.moduleName,
           row.moduleId,
-          row.courseCode,
           row.studentEmail,
         ].join(' ').toLowerCase()
         if (!haystack.includes(search)) return false
@@ -246,7 +245,6 @@ export default function AnalyticsDashboard() {
         const meta = getFlagMeta(row)
         return {
           module_name: row.moduleName || null,
-          course_code: row.courseCode || null,
           prompt: row.prompt || '',
           response: row.response || '',
           flag_category: meta.category,
@@ -395,7 +393,7 @@ export default function AnalyticsDashboard() {
               <input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search prompt, response, module, code…"
+                placeholder="Search prompt, response, module…"
                 className="tp-input"
               />
             </div>
@@ -419,7 +417,6 @@ export default function AnalyticsDashboard() {
                   <thead className="sticky top-0 bg-[var(--bg-frosted-muted)] backdrop-blur-sm border-b border-[var(--color-border-card-subtle)]">
                     <tr>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-36">Time</th>
-                      <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-28">Code</th>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-40">Module</th>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-40">Category</th>
                       <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-32">Status</th>
@@ -433,7 +430,6 @@ export default function AnalyticsDashboard() {
                       return (
                         <tr key={row.id} className={idx % 2 === 0 ? 'bg-white/75 hover:bg-[var(--bg-hover)]' : 'bg-[var(--color-bg-muted)] hover:bg-[var(--bg-hover)]'}>
                           <td className="px-3 py-2.5 text-[var(--color-text-muted)] whitespace-nowrap">{fmtTime(row.timestamp)}</td>
-                          <td className="px-3 py-2.5 text-[var(--color-text-secondary)] font-mono whitespace-nowrap">{row.courseCode || '—'}</td>
                           <td className="px-3 py-2.5 text-[var(--color-text-secondary)] whitespace-nowrap">{row.moduleName || (row.moduleId ? `${row.moduleId.slice(0, 8)}…` : '—')}</td>
                           <td className="px-3 py-2.5">
                             <CategoryBadge label={row.flagMeta.label} flagged={row.flagMeta.flagged} />

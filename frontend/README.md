@@ -26,7 +26,6 @@ src/
 │   ├── EntryPage.test.jsx       # EntryPage tests (collocated)
 │   ├── TeacherLoginPage.jsx     # Email+password and Google OAuth
 │   ├── StudentLoginPage.jsx     # Student email login
-│   ├── StudentEntryPage.jsx     # Course code entry
 │   └── student/
 │       └── StudentDashboard.jsx # Authenticated student class/module view
 └── lib/
@@ -79,8 +78,6 @@ src/components/
 ├── AnalyticsDashboard.test.jsx     ← Tests live next to components
 ├── EntryPage.jsx
 ├── EntryPage.test.jsx
-├── StudentEntryPage.jsx
-├── StudentEntryPage.test.jsx
 ├── TeacherLoginPage.jsx
 └── TeacherLoginPage.test.jsx
 ```

@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from database.db import get_db
 from database.app_models import (
     UserProfile,
-    CourseCode,
     PromptLog,
     TeacherClass,
     ClassModule,
@@ -54,24 +53,8 @@ class UpdateProfileRequest(BaseModel):
     theme: Optional[str] = None
 
 
-class CourseCodeResponse(BaseModel):
-    code: str
-    module_id: str
-    module_name: Optional[str] = None
-    teacher_uid: Optional[str] = None
-    teacher_name: Optional[str] = None
-
-
-class CreateCourseCodeRequest(BaseModel):
-    code: str
-    module_id: str
-    module_name: Optional[str] = None
-    teacher_name: Optional[str] = None
-
-
 class PromptLogCreate(BaseModel):
     teacher_uid: Optional[str] = None
-    course_code: Optional[str] = None
     module_id: Optional[str] = None
     module_name: Optional[str] = None
     session_id: Optional[str] = None
@@ -119,6 +102,7 @@ class ClassModuleResponse(BaseModel):
 
 class StudentCreate(BaseModel):
     student_email: str
+    student_name: Optional[str] = None
 
 
 class GroupCreate(BaseModel):
@@ -133,12 +117,14 @@ class ModuleGroupAccessBody(BaseModel):
     class_id: str
     module_id: str
     group_ids: list[str] = []
+    see_group_ids: list[str] = []
 
 
 class ModuleAccessBody(BaseModel):
     class_id: str
     module_id: str
     student_email: Optional[str] = None
+    can_see: bool = False
     is_unlocked: bool = False
     source: Optional[str] = "manual"
 
@@ -211,82 +197,6 @@ def put_me(body: UpdateProfileRequest, db: Session = Depends(get_db), uid: str =
     )
 
 
-# ── Course codes ────────────────────────────────────────────────────────
-
-@router.get("/course-codes/{code}", response_model=CourseCodeResponse)
-def get_course_code(code: str, db: Session = Depends(get_db)):
-    row = db.query(CourseCode).filter(CourseCode.code == code.strip().upper()).first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Course code not found")
-    return CourseCodeResponse(
-        code=row.code,
-        module_id=row.module_id,
-        module_name=row.module_name,
-        teacher_uid=row.teacher_uid,
-        teacher_name=row.teacher_name,
-    )
-
-
-@router.get("/course-codes", response_model=list[CourseCodeResponse])
-def list_course_codes(
-    teacher_uid: Optional[str] = None,
-    db: Session = Depends(get_db),
-    uid: str = Depends(require_uid),
-):
-    tid = teacher_uid or uid
-    if teacher_uid and teacher_uid != uid:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    q = db.query(CourseCode).filter(CourseCode.teacher_uid == tid)
-    return [
-        CourseCodeResponse(
-            code=r.code,
-            module_id=r.module_id,
-            module_name=r.module_name,
-            teacher_uid=r.teacher_uid,
-            teacher_name=r.teacher_name,
-        )
-        for r in q.all()
-    ]
-
-
-@router.post("/course-codes", response_model=CourseCodeResponse)
-def create_course_code(
-    body: CreateCourseCodeRequest,
-    db: Session = Depends(get_db),
-    uid: str = Depends(require_uid),
-):
-    code = body.code.strip().upper()
-    existing = db.query(CourseCode).filter(CourseCode.code == code).first()
-    if existing:
-        return CourseCodeResponse(
-            code=existing.code,
-            module_id=existing.module_id,
-            module_name=existing.module_name,
-            teacher_uid=existing.teacher_uid,
-            teacher_name=existing.teacher_name,
-        )
-    mod = db.query(Module).filter(Module.id == body.module_id).first()
-    if not mod:
-        raise HTTPException(status_code=404, detail="Module not found")
-    row = CourseCode(
-        code=code,
-        module_id=body.module_id,
-        module_name=body.module_name or mod.name,
-        teacher_uid=uid,
-        teacher_name=body.teacher_name,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return CourseCodeResponse(
-        code=row.code,
-        module_id=row.module_id,
-        module_name=row.module_name,
-        teacher_uid=row.teacher_uid,
-        teacher_name=row.teacher_name,
-    )
-
-
 # ── Prompt logs (analytics) ───────────────────────────────────────────
 
 @router.post("/prompts")
@@ -299,7 +209,6 @@ def create_prompt(
     student_email = (profile.email or "").lower() if profile and profile.email else None
     row = PromptLog(
         teacher_uid=body.teacher_uid,
-        course_code=body.course_code,
         module_id=body.module_id,
         module_name=body.module_name,
         session_id=body.session_id,
@@ -330,7 +239,6 @@ def list_prompts(teacher_uid: str, db: Session = Depends(get_db), uid: str = Dep
         {
             "id": r.id,
             "teacherUid": r.teacher_uid,
-            "courseCode": r.course_code,
             "moduleId": r.module_id,
             "moduleName": r.module_name,
             "sessionId": r.session_id,
@@ -484,6 +392,7 @@ def list_teacher_class_students(teacher_uid: str, db: Session = Depends(get_db),
             "teacherName": r.teacher_name,
             "studentEmail": r.student_email,
             "studentUid": r.student_uid,
+            "studentName": r.student_name,
             "status": r.status,
         }
         for r in rows
@@ -608,6 +517,7 @@ def list_students(class_id: str, db: Session = Depends(get_db), uid: str = Depen
             "teacherUid": r.teacher_uid,
             "studentEmail": r.student_email,
             "studentUid": r.student_uid,
+            "studentName": r.student_name,
             "status": r.status,
         }
         for r in rows
@@ -620,17 +530,27 @@ def add_student(class_id: str, body: StudentCreate, db: Session = Depends(get_db
     if not cls:
         raise HTTPException(status_code=404, detail="Class not found")
     email = body.student_email.strip().lower()
+    student_name = (body.student_name or "").strip() or None
+    student_uid = None
+    if not student_name or student_uid is None:
+        prof = db.query(UserProfile).filter(UserProfile.email == email).first()
+        if prof:
+            student_uid = prof.uid
+            if not student_name:
+                student_name = prof.display_name
     row = ClassStudent(
         class_id=class_id,
         class_name=cls.name,
         teacher_uid=uid,
         student_email=email,
+        student_uid=student_uid,
+        student_name=student_name,
         status="invited",
     )
     db.add(row)
     db.commit()
     db.refresh(row)
-    return {"id": row.id, "studentEmail": row.student_email}
+    return {"id": row.id, "studentEmail": row.student_email, "studentName": row.student_name}
 
 
 @router.get("/classes/{class_id}/groups")
@@ -680,6 +600,7 @@ def list_module_access(teacher_uid: str, db: Session = Depends(get_db), uid: str
             "classId": r.class_id,
             "moduleId": r.module_id,
             "studentEmail": r.student_email,
+            "canSee": bool(r.can_see),
             "isUnlocked": bool(r.is_unlocked),
             "source": r.source,
         }
@@ -690,6 +611,9 @@ def list_module_access(teacher_uid: str, db: Session = Depends(get_db), uid: str
 @router.post("/module-access")
 def upsert_module_access(body: ModuleAccessBody, db: Session = Depends(get_db), uid: str = Depends(require_uid)):
     email = (body.student_email or "").strip().lower() if body.student_email else None
+    # Invariant: access implies visibility.
+    is_unlocked = bool(body.is_unlocked)
+    can_see = bool(body.can_see) or is_unlocked
     row = (
         db.query(ModuleAccess)
         .filter(
@@ -706,12 +630,14 @@ def upsert_module_access(body: ModuleAccessBody, db: Session = Depends(get_db), 
             module_id=body.module_id,
             teacher_uid=uid,
             student_email=email,
-            is_unlocked=body.is_unlocked,
+            can_see=can_see,
+            is_unlocked=is_unlocked,
             source=body.source or "manual",
         )
         db.add(row)
     else:
-        row.is_unlocked = body.is_unlocked
+        row.can_see = can_see
+        row.is_unlocked = is_unlocked
         row.source = body.source or row.source
     db.commit()
     return {"ok": True}
@@ -728,6 +654,7 @@ def list_module_group_access(teacher_uid: str, db: Session = Depends(get_db), ui
             "classId": r.class_id,
             "moduleId": r.module_id,
             "groupIds": list(r.group_ids or []),
+            "seeGroupIds": list(r.see_group_ids or []),
         }
         for r in rows
     ]
@@ -754,10 +681,12 @@ def upsert_module_group_access(
             module_id=body.module_id,
             teacher_uid=uid,
             group_ids=list(body.group_ids or []),
+            see_group_ids=list(body.see_group_ids or []),
         )
         db.add(row)
     else:
         row.group_ids = list(body.group_ids or [])
+        row.see_group_ids = list(body.see_group_ids or [])
     db.commit()
     return {"ok": True}
 
@@ -789,10 +718,10 @@ def student_dashboard(db: Session = Depends(get_db), student_uid: str = Depends(
     access_rows = db.query(ModuleAccess).filter(ModuleAccess.student_uid == student_uid).all()
     if email:
         access_rows += db.query(ModuleAccess).filter(ModuleAccess.student_email == email).all()
-    access_map = {(r.class_id, r.module_id): bool(r.is_unlocked) for r in access_rows}
-
-    codes = db.query(CourseCode).all()
-    code_by_module = {c.module_id: c.code for c in codes}
+    access_map = {
+        (r.class_id, r.module_id): {"can_see": bool(r.can_see), "unlocked": bool(r.is_unlocked)}
+        for r in access_rows
+    }
 
     cards = []
     for class_id in class_ids:
@@ -802,6 +731,10 @@ def student_dashboard(db: Session = Depends(get_db), student_uid: str = Depends(
         links = db.query(ClassModule).filter(ClassModule.class_id == class_id).all()
         modules = []
         for link in links:
+            access = access_map.get((class_id, link.module_id))
+            # Hidden by default: only surface modules the student is allowed to see.
+            if not access or not access["can_see"]:
+                continue
             meta = module_meta.get(link.module_id)
             modules.append(
                 {
@@ -809,8 +742,7 @@ def student_dashboard(db: Session = Depends(get_db), student_uid: str = Depends(
                     "moduleName": (meta.name if meta else link.module_name) or "Module",
                     "moduleDescription": meta.description if meta else None,
                     "moduleStatus": link.module_status or "active",
-                    "unlocked": access_map.get((class_id, link.module_id), False),
-                    "courseCode": code_by_module.get(link.module_id),
+                    "unlocked": access["unlocked"],
                 }
             )
         cards.append(

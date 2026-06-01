@@ -30,7 +30,6 @@ export default function StudentDashboard({ currentUser, onLogout }) {
             moduleDescription: m.moduleDescription ?? m.module_description ?? null,
             moduleStatus: m.moduleStatus ?? m.module_status ?? 'active',
             unlocked: Boolean(m.unlocked),
-            courseCode: m.courseCode ?? m.course_code ?? null,
           })),
         }))
         setClassCards(normalized)
@@ -104,7 +103,7 @@ export default function StudentDashboard({ currentUser, onLogout }) {
                   const visibleModules = classCard.modules.filter((m) => m.moduleStatus !== 'archived')
                   const unlockedCount = visibleModules.filter((m) => m.unlocked).length
                   const totalCount = visibleModules.length
-                  const badgeText = unlockedCount === 0
+                  const badgeText = totalCount === 0
                     ? 'Not activated yet'
                     : `${unlockedCount}/${totalCount} unlocked`
                   return (
@@ -122,10 +121,6 @@ export default function StudentDashboard({ currentUser, onLogout }) {
 
                 <div className="mt-3 space-y-2">
                   {classCard.modules.filter((m) => m.moduleStatus !== 'archived').length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-[rgba(65,90,119,0.28)] bg-white/55 px-3 py-2.5 text-sm text-[var(--color-text-secondary)]">
-                      Your instructor has not activated any modules yet.
-                    </div>
-                  ) : classCard.modules.filter((m) => m.moduleStatus !== 'archived' && m.unlocked).length === 0 ? (
                     <div className="rounded-lg border border-dashed border-[rgba(65,90,119,0.28)] bg-white/55 px-3 py-2.5 text-sm text-[var(--color-text-secondary)]">
                       Your instructor has not activated any modules yet.
                     </div>
@@ -152,7 +147,6 @@ export default function StudentDashboard({ currentUser, onLogout }) {
                             moduleName: module.moduleName,
                             moduleDescription: module.moduleDescription || null,
                             teacherName: classCard.teacherName || null,
-                            courseCode: module.courseCode || 'ENROLLED',
                           }
                           registerModule(module.moduleId, moduleData)
                           navigate(`/student/module/${module.moduleId}`)

@@ -15,24 +15,6 @@ import { Button } from './components/ui/primitives'
 import { apiUrl } from './lib/api'
 import ThemeToggleButton from './components/common/ThemeToggleButton'
 
-function loadStudentSessions(courseCode) {
-  try {
-    const raw = localStorage.getItem(`tp_sessions_${courseCode}`)
-    if (raw) return JSON.parse(raw)
-  } catch {
-    /* ignore */
-  }
-  return []
-}
-
-function saveStudentSessions(courseCode, sessions) {
-  try {
-    localStorage.setItem(`tp_sessions_${courseCode}`, JSON.stringify(sessions))
-  } catch {
-    /* ignore */
-  }
-}
-
 function makeNewSession() {
   return {
     id: Math.random().toString(36).slice(2) + Date.now().toString(36),
@@ -49,26 +31,19 @@ function TeacherRoute({ currentUser, currentUserRole, authLoading, children }) {
   return <Navigate to="/" replace />
 }
 
-function StudentRoute({ currentUser, currentUserRole, studentData, authLoading, children }) {
-  // Guest users with stored student data don't need Firebase auth to resolve
-  if (authLoading && !studentData) return <LoadingSpinner />
-  // Allow authenticated students OR guest users with a course code
-  if ((currentUser && currentUserRole === 'student') || (!currentUser && studentData)) return children
+function StudentRoute({ currentUser, currentUserRole, authLoading, children }) {
+  if (authLoading) return <LoadingSpinner />
+  if (currentUser && currentUserRole === 'student') return children
   return <Navigate to="/" replace />
 }
 
 
 export default function App() {
   const { currentUser, currentUserRole, currentUserProfile, authLoading, logout } = useAuth()
-  const { studentData, clearStudent } = useStudent()
   const navigate = useNavigate()
 
   const handleLogout = async () => {
-    if (currentUser) {
-      await logout()
-    } else {
-      clearStudent()
-    }
+    await logout()
     navigate('/', { replace: true })
   }
 
@@ -77,7 +52,6 @@ export default function App() {
       currentUser={currentUser}
       currentUserProfile={currentUserProfile}
       authLoading={authLoading}
-      allowGuestTheme={Boolean(studentData)}
     >
     <Routes>
       <Route
@@ -85,7 +59,7 @@ export default function App() {
         element={
           authLoading ? <LoadingSpinner /> :
           currentUser && currentUserRole === 'teacher' ? <Navigate to="/teacher" replace /> :
-          (currentUser && currentUserRole === 'student') || studentData ? <Navigate to="/student" replace /> :
+          currentUser && currentUserRole === 'student' ? <Navigate to="/student" replace /> :
           <EntryPage />
         }
       />
@@ -100,18 +74,15 @@ export default function App() {
       <Route
         path="/student"
         element={
-          <StudentRoute currentUser={currentUser} currentUserRole={currentUserRole} studentData={studentData} authLoading={authLoading}>
-            {currentUser
-              ? <StudentDashboard currentUser={currentUser} onLogout={handleLogout} />
-              : <StudentApp studentData={studentData} onLogout={handleLogout} currentUser={null} />
-            }
+          <StudentRoute currentUser={currentUser} currentUserRole={currentUserRole} authLoading={authLoading}>
+            <StudentDashboard currentUser={currentUser} onLogout={handleLogout} />
           </StudentRoute>
         }
       />
       <Route
         path="/student/module/:moduleId"
         element={
-          <StudentRoute currentUser={currentUser} currentUserRole={currentUserRole} studentData={studentData} authLoading={authLoading}>
+          <StudentRoute currentUser={currentUser} currentUserRole={currentUserRole} authLoading={authLoading}>
             <StudentModuleView onLogout={handleLogout} currentUser={currentUser} />
           </StudentRoute>
         }
@@ -146,7 +117,6 @@ function StudentModuleView({ onLogout, currentUser }) {
             moduleName: data.name,
             moduleDescription: data.description || null,
             teacherName: null,
-            courseCode: 'DIRECT',
           }
           registerModule(data.id, fallback)
         }
@@ -173,7 +143,6 @@ function StudentModuleView({ onLogout, currentUser }) {
 
 function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
   const isAuthenticated = Boolean(currentUser)
-  const storageKey = studentData.courseCode || `${studentData.classId || 'class'}_${studentData.moduleId}`
   const [sessions, setSessions] = useState([])
   const [activeSessionId, setActiveSessionId] = useState('')
   const [sessionsLoading, setSessionsLoading] = useState(isAuthenticated)
@@ -194,20 +163,6 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
     setPdfViewerOpen(false)
     closeMobileSessions()
   }
-
-  useEffect(() => {
-    if (isAuthenticated) return
-    const stored = loadStudentSessions(storageKey)
-    if (stored.length > 0) {
-      setSessions(stored)
-      setActiveSessionId(stored[0]?.id ?? '')
-      return
-    }
-    const first = makeNewSession()
-    saveStudentSessions(storageKey, [first])
-    setSessions([first])
-    setActiveSessionId(first.id)
-  }, [isAuthenticated, storageKey])
 
   useEffect(() => {
     if (!studentData.moduleId) return
@@ -324,7 +279,6 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
     const session = makeNewSession()
     const updated = [session, ...sessions]
     setSessions(updated)
-    if (!isAuthenticated) saveStudentSessions(storageKey, updated)
     setActiveSessionId(session.id)
     setActiveCitations([])
     setPdfViewerOpen(false)
@@ -347,7 +301,6 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
           loadedFromServer: true,
         }
       })
-      if (!isAuthenticated) saveStudentSessions(storageKey, updated)
       return updated
     })
   }
@@ -369,11 +322,7 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
         /* ignore */
       }
     }
-    setSessions((prev) => {
-      const updated = prev.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s))
-      if (!isAuthenticated) saveStudentSessions(storageKey, updated)
-      return updated
-    })
+    setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s)))
   }
 
   const handleDeleteSession = async (sessionId) => {
@@ -401,7 +350,6 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
           setActiveSessionId(fresh.id)
         }
       }
-      if (!isAuthenticated) saveStudentSessions(storageKey, updated)
       return updated
     })
     if (sessionId === activeSessionId) {
