@@ -203,7 +203,11 @@ Open two terminals from the project root:
 ```sh
 source .venv/bin/activate
 python backend/main.py
-```  
+```
+
+**Terminal 2 — frontend:**
+```sh
+cd frontend
 npm run dev
 ```
 
