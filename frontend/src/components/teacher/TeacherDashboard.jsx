@@ -1831,22 +1831,26 @@ function ClassManagementPanel({ currentUser }) {
 
                               return (
                                 <div key={moduleItem.id} className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 p-3">
-                                  <div
-                                    className="cursor-pointer"
-                                    onClick={async () => {
-                                      const next = !openDocumentsByModule[moduleItem.id]
-                                      setOpenDocumentsByModule((prev) => ({ ...prev, [moduleItem.id]: next }))
-                                      if (next) await fetchDocumentsForModule(moduleItem.id)
-                                    }}
-                                  >
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="flex items-start gap-2 min-w-0">
-                                    <span className="text-lg leading-none text-[var(--color-text-muted)] select-none mt-0.5" aria-hidden="true">
-                                      {openDocumentsByModule[moduleItem.id] ? '−' : '+'}
-                                    </span>
-                                    <div className="min-w-0">
+                                      <button
+                                        type="button"
+                                        className="mt-0.5 inline-flex items-center justify-center w-7 h-7 rounded-md border border-[var(--color-border-card-subtle)] bg-[var(--color-bg-muted)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+                                        aria-label={openDocumentsByModule[moduleItem.id] ? 'Collapse module documents' : 'Expand module documents'}
+                                        onClick={async () => {
+                                          const next = !openDocumentsByModule[moduleItem.id]
+                                          setOpenDocumentsByModule((prev) => ({ ...prev, [moduleItem.id]: next }))
+                                          if (next) await fetchDocumentsForModule(moduleItem.id)
+                                        }}
+                                      >
+                                        <span className="text-lg leading-none select-none" aria-hidden="true">
+                                          {openDocumentsByModule[moduleItem.id] ? '−' : '+'}
+                                        </span>
+                                      </button>
+
+                                      <div className="min-w-0">
                                       {editingModuleNameId === moduleItem.id ? (
-                                        <div className="flex items-center gap-1.5 mb-1" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center gap-1.5 mb-1">
                                           <Input
                                             value={editingModuleNameValue}
                                             onChange={(e) => setEditingModuleNameValue(e.target.value)}
@@ -1914,7 +1918,7 @@ function ClassManagementPanel({ currentUser }) {
                                       )}
                                     </div>
                                     </div>
-                                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                                       <Badge tone={moduleItem.moduleStatus === 'archived' ? 'warning' : 'neutral'}>
                                         {moduleItem.moduleStatus === 'archived' ? 'Archived' : 'Module'}
                                       </Badge>
@@ -1967,57 +1971,56 @@ function ClassManagementPanel({ currentUser }) {
                                     <Badge tone="neutral">Viewable: {seenCount}</Badge>
                                     <Badge tone="brand">Unlocked: {unlockedCount}</Badge>
                                   </div>
-                                  </div>
 
                                   <div
                                     className="grid transition-[grid-template-rows] duration-300 ease-in-out"
                                     style={{ gridTemplateRows: openDocumentsByModule[moduleItem.id] ? '1fr' : '0fr' }}
                                   >
-                                  <div className="min-h-0 overflow-hidden">
-                                  <div className="mt-3 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/80">
-                                    <DocumentPanel
-                                      moduleId={moduleItem.id}
-                                      documents={documentsByModule[moduleItem.id] || []}
-                                      onDocumentsChanged={() => fetchDocumentsForModule(moduleItem.id)}
-                                    />
-                                  </div>
-
-                                  <div className="mt-2.5">
-                                    <p className="tp-eyebrow mb-1.5">
-                                      Assign Groups
-                                    </p>
-                                    {classGroups.length === 0 ? (
-                                      <span className="text-xs text-[var(--color-text-muted)]">Create groups first in the Groups tab.</span>
-                                    ) : (
-                                      <div className="space-y-1.5">
-                                        {classGroups.map((groupItem) => (
-                                          <div
-                                            key={`${moduleItem.id}-${groupItem.id}`}
-                                            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 px-2.5 py-1.5"
-                                          >
-                                            <span className="text-sm text-[var(--color-text-secondary)] truncate">
-                                              {groupItem.name}
-                                              <span className="text-[var(--color-text-muted)]"> · Number of Students: {(groupItem.members || []).length}</span>
-                                            </span>
-                                            <div className="flex items-center gap-1.5 shrink-0">
-                                              <AccessToggle
-                                                kind="see"
-                                                active={seeGroupIds.includes(groupItem.id) || accessGroupIds.includes(groupItem.id)}
-                                                title="Group can see this module"
-                                                onClick={() => handleToggleGroupSee({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
-                                              />
-                                              <AccessToggle
-                                                kind="access"
-                                                active={accessGroupIds.includes(groupItem.id)}
-                                                title="Group can open this module"
-                                                onClick={() => handleToggleGroupAccess({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
-                                              />
-                                            </div>
-                                          </div>
-                                        ))}
+                                    <div className="min-h-0 overflow-hidden">
+                                      <div className="mt-3 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/80">
+                                        <DocumentPanel
+                                          moduleId={moduleItem.id}
+                                          documents={documentsByModule[moduleItem.id] || []}
+                                          onDocumentsChanged={() => fetchDocumentsForModule(moduleItem.id)}
+                                        />
                                       </div>
-                                    )}
-                                  </div>
+
+                                      <div className="mt-2.5">
+                                        <p className="tp-eyebrow mb-1.5">
+                                          Assign Groups
+                                        </p>
+                                        {classGroups.length === 0 ? (
+                                          <span className="text-xs text-[var(--color-text-muted)]">Create groups first in the Groups tab.</span>
+                                        ) : (
+                                          <div className="space-y-1.5">
+                                            {classGroups.map((groupItem) => (
+                                              <div
+                                                key={`${moduleItem.id}-${groupItem.id}`}
+                                                className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 px-2.5 py-1.5"
+                                              >
+                                                <span className="text-sm text-[var(--color-text-secondary)] truncate">
+                                                  {groupItem.name}
+                                                  <span className="text-[var(--color-text-muted)]"> · Number of Students: {(groupItem.members || []).length}</span>
+                                                </span>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                  <AccessToggle
+                                                    kind="see"
+                                                    active={seeGroupIds.includes(groupItem.id) || accessGroupIds.includes(groupItem.id)}
+                                                    title="Group can see this module"
+                                                    onClick={() => handleToggleGroupSee({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
+                                                  />
+                                                  <AccessToggle
+                                                    kind="access"
+                                                    active={accessGroupIds.includes(groupItem.id)}
+                                                    title="Group can open this module"
+                                                    onClick={() => handleToggleGroupAccess({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
+                                                  />
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
 
                                   {classStudents.length > 0 && (
                                     <div className="mt-3 rounded-lg border border-[var(--color-border-card-subtle)] bg-[var(--color-bg-muted)] p-2.5">
