@@ -356,52 +356,68 @@ export default function AnalyticsDashboard() {
         )}
       </section>
 
-      <section className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_290px] gap-4">
-        <div className="space-y-3">
-          <div className="sticky top-0 z-10 rounded-xl border border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-md p-3">
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_220px_220px] gap-2.5">
+      <section className="space-y-4">
+        <div className="rounded-xl border border-[var(--color-border-card-subtle)] tp-card-surface-soft p-3 md:p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)] mb-2.5">
+            Filter chat logs
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+            <label className="flex flex-col gap-1 min-w-0">
+              <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Module</span>
               <select
                 value={filterModule}
                 onChange={(e) => setFilterModule(e.target.value)}
-                className="tp-input"
+                className="tp-input w-full min-w-0"
               >
                 <option value="all">All modules</option>
                 {moduleOptions.map(([id, name]) => (
                   <option key={id} value={id}>{name}</option>
                 ))}
               </select>
+            </label>
 
+            <label className="flex flex-col gap-1 min-w-0">
+              <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Time range</span>
               <select
                 value={filterRange}
                 onChange={(e) => setFilterRange(e.target.value)}
-                className="tp-input"
+                className="tp-input w-full min-w-0"
               >
                 <option value="all">All time</option>
                 <option value="30d">Last 30 days</option>
                 <option value="7d">Last 7 days</option>
               </select>
+            </label>
 
+            <label className="flex flex-col gap-1 min-w-0">
+              <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Category</span>
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
-                className="tp-input"
+                className="tp-input w-full min-w-0"
               >
                 <option value="all">All categories</option>
                 {categoryOptions.map(([id, label]) => (
                   <option key={id} value={id}>{label}</option>
                 ))}
               </select>
+            </label>
 
+            <label className="flex flex-col gap-1 min-w-0 sm:col-span-2 xl:col-span-1">
+              <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Search</span>
               <input
+                type="search"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search prompt, response, module, code…"
-                className="tp-input"
+                placeholder="Prompt, response, module, code…"
+                className="tp-input w-full min-w-0"
               />
-            </div>
+            </label>
           </div>
+        </div>
 
-          <div className="rounded-xl border border-[var(--color-border-card-subtle)] bg-white/75 overflow-hidden">
+        <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_290px] gap-4 items-start">
+          <div className="rounded-xl border border-[var(--color-border-card-subtle)] bg-white/75 overflow-hidden min-w-0">
             <div className="px-4 py-3 border-b border-[var(--color-border-card-subtle)] flex items-center justify-between gap-2">
               <h4 className="text-sm font-semibold text-[var(--color-text-primary)]">Student Chat Logs</h4>
               <span className="text-xs text-[var(--color-text-muted)]">{tableRows.length} results</span>
@@ -473,30 +489,30 @@ export default function AnalyticsDashboard() {
               </div>
             )}
           </div>
-        </div>
 
-        <aside className="space-y-3">
-          <InsightCard
-            title="Most Active Module"
-            value={analytics.mostActiveModuleName}
-            sub="Highest prompt volume in current filter"
-          />
-          <InsightCard
-            title="Most Frequent Topic"
-            value={analytics.topKeyword}
-            sub="Top recurring keyword from student prompts"
-          />
-          <InsightCard
-            title="Students Needing Attention"
-            value={String(analytics.needingAttention)}
-            sub="Learners with repeated blocked-response patterns"
-          />
-          <InsightCard
-            title="Unique Sessions"
-            value={String(analytics.uniqueSessions)}
-            sub="Distinct conversation threads in current filter"
-          />
-        </aside>
+          <aside className="space-y-3 min-w-0">
+            <InsightCard
+              title="Most Active Module"
+              value={analytics.mostActiveModuleName}
+              sub="Highest prompt volume in current filter"
+            />
+            <InsightCard
+              title="Most Frequent Topic"
+              value={analytics.topKeyword}
+              sub="Top recurring keyword from student prompts"
+            />
+            <InsightCard
+              title="Students Needing Attention"
+              value={String(analytics.needingAttention)}
+              sub="Learners with repeated blocked-response patterns"
+            />
+            <InsightCard
+              title="Unique Sessions"
+              value={String(analytics.uniqueSessions)}
+              sub="Distinct conversation threads in current filter"
+            />
+          </aside>
+        </div>
       </section>
     </div>
   )
