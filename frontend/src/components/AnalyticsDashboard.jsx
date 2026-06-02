@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import rehypeKatex from 'rehype-katex'
+import remarkMath from 'remark-math'
 import { useAuth } from '../contexts/AuthContext'
 import { apiUrl } from '../lib/api'
 import { apiFetch } from '../lib/apiAuth'
@@ -350,7 +353,25 @@ export default function AnalyticsDashboard() {
 
         {aiSummary ? (
           <div className="mt-3 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/75 p-3">
-            <pre className="whitespace-pre-wrap text-sm text-[var(--color-text-secondary)] font-sans leading-6">{aiSummary}</pre>
+            <div className="text-sm text-[var(--color-text-secondary)] leading-6 space-y-2">
+              <ReactMarkdown
+                remarkPlugins={[remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                components={{
+                  h1: (props) => <h3 className="text-base font-semibold text-[var(--color-text-primary)] mt-3 first:mt-0" {...props} />,
+                  h2: (props) => <h3 className="text-base font-semibold text-[var(--color-text-primary)] mt-3 first:mt-0" {...props} />,
+                  h3: (props) => <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mt-3 first:mt-0" {...props} />,
+                  ul: (props) => <ul className="list-disc pl-5 space-y-1" {...props} />,
+                  ol: (props) => <ol className="list-decimal pl-5 space-y-1" {...props} />,
+                  li: (props) => <li className="marker:text-[var(--color-text-muted)]" {...props} />,
+                  p: (props) => <p className="my-1" {...props} />,
+                  strong: (props) => <strong className="font-semibold text-[var(--color-text-primary)]" {...props} />,
+                  code: (props) => <code className="rounded bg-[var(--bg-frosted)] px-1 py-0.5 text-[0.85em]" {...props} />,
+                }}
+              >
+                {aiSummary}
+              </ReactMarkdown>
+            </div>
             {summaryMeta && (
               <p className="mt-2 text-xs text-[var(--color-text-muted)]">
                 Generated: {fmtTime(summaryMeta.generatedAt)} · Sampled {summaryMeta.sampledRows} of {summaryMeta.totalRows} rows
@@ -442,13 +463,13 @@ export default function AnalyticsDashboard() {
                 <table className="w-full min-w-[980px] text-xs">
                   <thead className="sticky top-0 bg-[var(--bg-frosted-muted)] backdrop-blur-sm border-b border-[var(--color-border-card-subtle)]">
                     <tr>
-                      <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-36">Time</th>
-                      <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-44">User</th>
-                      <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-40">Module</th>
-                      <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-40">Category</th>
-                      <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] w-32">Status</th>
-                      <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] min-w-[240px]">Student Prompt</th>
-                      <th className="text-left px-3 py-2 font-semibold text-[var(--color-text-muted)] min-w-[260px]">Tutor Response</th>
+                      <th className="text-left px-3 py-2 font-bold text-[var(--color-text-primary)] w-36">Time</th>
+                      <th className="text-left px-3 py-2 font-bold text-[var(--color-text-primary)] w-44">User</th>
+                      <th className="text-left px-3 py-2 font-bold text-[var(--color-text-primary)] w-40">Module</th>
+                      <th className="text-left px-3 py-2 font-bold text-[var(--color-text-primary)] w-40">Category</th>
+                      <th className="text-left px-3 py-2 font-bold text-[var(--color-text-primary)] w-32">Status</th>
+                      <th className="text-left px-3 py-2 font-bold text-[var(--color-text-primary)] min-w-[240px]">Student Prompt</th>
+                      <th className="text-left px-3 py-2 font-bold text-[var(--color-text-primary)] min-w-[260px]">Tutor Response</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[rgba(65,90,119,0.1)]">

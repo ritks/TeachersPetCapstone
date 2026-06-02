@@ -421,7 +421,7 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
   const [greeting] = useState(
     () => CHAT_COPY.greetings[Math.floor(Math.random() * CHAT_COPY.greetings.length)]
   )
-  const scrollRef = useRef(null)
+  const scrollContainerRef = useRef(null)
   const streamTimerRef = useRef(null)
   const streamGenerationRef = useRef(0)
 
@@ -512,7 +512,8 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
   }, [selectedModuleId, sessionKey, initialBackendSessionId])
 
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = scrollContainerRef.current
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [messages, loading])
 
   const handleSubmit = async (e) => {
@@ -623,7 +624,7 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
 
   return (
     <>
-      <section className="flex-1 overflow-y-auto px-4 py-6 tp-card-surface-soft">
+      <section ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-6 tp-card-surface-soft">
         {isStudentEmptyState ? (
           <StudentEmptyState greeting={greeting} onQuickAction={handleQuickAction} />
         ) : (
@@ -632,7 +633,6 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
               <Bubble key={i} message={msg} onCitationClick={(c) => onCitationsChange?.([c])} />
             ))}
             {loading && !messages.some((msg) => msg.isStreaming) && <TypingIndicator />}
-            <div ref={scrollRef} />
           </div>
         )}
       </section>

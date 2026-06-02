@@ -703,24 +703,13 @@ function ClassManagementPanel({ currentUser }) {
     setSavingGroupNameId(groupItem.id)
 
     try {
-      try {
-        if (!String(groupItem.id).startsWith('local-')) {
-          await setDoc(doc(db, 'classGroups', groupItem.id), {
-            name: trimmed,
-            updatedAt: serverTimestamp(),
-          }, { merge: true })
-        } else {
-          throw new Error('Local group')
-        }
-      } catch {
-        const localGroups = readLocal(localGroupsKey, [])
-        const idx = localGroups.findIndex((row) => row.id === groupItem.id)
-        if (idx >= 0) {
-          localGroups[idx] = { ...localGroups[idx], name: trimmed, updatedAt: Date.now() }
-          writeLocal(localGroupsKey, localGroups)
-        }
-        setInfoMessage('Group name saved locally (cloud permissions blocked).')
+      const localGroups = readLocal(localGroupsKey, [])
+      const idx = localGroups.findIndex((row) => row.id === groupItem.id)
+      if (idx >= 0) {
+        localGroups[idx] = { ...localGroups[idx], name: trimmed, updatedAt: Date.now() }
+        writeLocal(localGroupsKey, localGroups)
       }
+      setInfoMessage('Group name saved locally.')
 
       setGroupsByClass((prev) => ({
         ...prev,
@@ -789,30 +778,17 @@ function ClassManagementPanel({ currentUser }) {
       const res = await fetch(apiUrl(`/modules/${moduleItem.id}`), { method: 'DELETE' })
       if (!res.ok) throw new Error(`Backend delete failed (${res.status})`)
 
-      // 2. Delete classModules Firestore doc
-      try {
-        if (moduleItem.classModuleDocId && !String(moduleItem.classModuleDocId).startsWith('local-')) {
-          await deleteDoc(doc(db, 'classModules', moduleItem.classModuleDocId))
-        } else {
-          throw new Error('Local link')
-        }
-      } catch {
-        const localLinks = readLocal(localLinksKey, [])
-        writeLocal(localLinksKey, localLinks.filter(
-          (row) => !(row.classId === classId && row.moduleId === moduleItem.id),
-        ))
-      }
+      // 2. Remove the class-module link locally
+      const localLinks = readLocal(localLinksKey, [])
+      writeLocal(localLinksKey, localLinks.filter(
+        (row) => !(row.classId === classId && row.moduleId === moduleItem.id),
+      ))
 
-      // 3. Clean up moduleGroupAccess for this module
-      const accessDocId = `${classId}_${moduleItem.id}`.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 120)
-      try {
-        await deleteDoc(doc(db, 'moduleGroupAccess', accessDocId))
-      } catch {
-        const localGroupAccess = readLocal(localGroupAccessKey, [])
-        writeLocal(localGroupAccessKey, localGroupAccess.filter(
-          (row) => !(row.classId === classId && row.moduleId === moduleItem.id),
-        ))
-      }
+      // 3. Clean up moduleGroupAccess for this module locally
+      const localGroupAccess = readLocal(localGroupAccessKey, [])
+      writeLocal(localGroupAccessKey, localGroupAccess.filter(
+        (row) => !(row.classId === classId && row.moduleId === moduleItem.id),
+      ))
 
       // 4. Update local state
       setModulesByClass((prev) => ({
@@ -1016,43 +992,25 @@ function ClassManagementPanel({ currentUser }) {
     setDeletingStudentEmail(studentItem.studentEmail)
     setErrorMessage('')
     try {
-      // 1. Delete from classStudents
-      try {
-        if (studentItem.id && !String(studentItem.id).startsWith('local-')) {
-          await deleteDoc(doc(db, 'classStudents', studentItem.id))
-        } else {
-          throw new Error('Local student')
-        }
-      } catch {
-        const localStudents = readLocal(localStudentsKey, [])
-        writeLocal(localStudentsKey, localStudents.filter(
-          (row) => !(row.studentEmail === studentItem.studentEmail && row.classId === classId),
-        ))
-      }
+      // 1. Remove the student from this class locally
+      const localStudents = readLocal(localStudentsKey, [])
+      writeLocal(localStudentsKey, localStudents.filter(
+        (row) => !(row.studentEmail === studentItem.studentEmail && row.classId === classId),
+      ))
 
       // 2. Remove from all groups in this class
       const classGroupList = groupsByClass[classId] || []
-      await Promise.all(
-        classGroupList
-          .filter((g) => (g.members || []).includes(studentItem.studentEmail))
-          .map(async (g) => {
-            const nextMembers = g.members.filter((e) => e !== studentItem.studentEmail)
-            try {
-              if (!String(g.id).startsWith('local-')) {
-                await setDoc(doc(db, 'classGroups', g.id), { members: nextMembers, updatedAt: serverTimestamp() }, { merge: true })
-              } else {
-                throw new Error('Local group')
-              }
-            } catch {
-              const localGroups = readLocal(localGroupsKey, [])
-              const idx = localGroups.findIndex((row) => row.id === g.id)
-              if (idx >= 0) {
-                localGroups[idx] = { ...localGroups[idx], members: nextMembers }
-                writeLocal(localGroupsKey, localGroups)
-              }
-            }
-          }),
-      )
+      classGroupList
+        .filter((g) => (g.members || []).includes(studentItem.studentEmail))
+        .forEach((g) => {
+          const nextMembers = g.members.filter((e) => e !== studentItem.studentEmail)
+          const localGroups = readLocal(localGroupsKey, [])
+          const idx = localGroups.findIndex((row) => row.id === g.id)
+          if (idx >= 0) {
+            localGroups[idx] = { ...localGroups[idx], members: nextMembers }
+            writeLocal(localGroupsKey, localGroups)
+          }
+        })
 
       // 3. Update local state
       setStudentsByClass((prev) => ({
@@ -1086,17 +1044,9 @@ function ClassManagementPanel({ currentUser }) {
     setDeletingGroupId(groupItem.id)
     setErrorMessage('')
     try {
-      // 1. Delete from classGroups
-      try {
-        if (!String(groupItem.id).startsWith('local-')) {
-          await deleteDoc(doc(db, 'classGroups', groupItem.id))
-        } else {
-          throw new Error('Local group')
-        }
-      } catch {
-        const localGroups = readLocal(localGroupsKey, [])
-        writeLocal(localGroupsKey, localGroups.filter((row) => row.id !== groupItem.id))
-      }
+      // 1. Remove the group locally
+      const localGroups = readLocal(localGroupsKey, [])
+      writeLocal(localGroupsKey, localGroups.filter((row) => row.id !== groupItem.id))
 
       // 2. Remove this groupId from every module's see/access lists in this class
       const classModuleList = modulesByClass[classId] || []
@@ -1472,7 +1422,7 @@ function ClassManagementPanel({ currentUser }) {
                         <p className="text-[1.35rem] leading-none font-semibold text-[var(--color-text-primary)] mt-1">{insight.activeStudents}</p>
                       </div>
                       <div className="rounded-xl border border-[var(--color-border-card-subtle)] tp-card-surface-soft px-3 py-2.5">
-                        <p className="text-[0.58rem] leading-none font-semibold uppercase tracking-[0.1em] whitespace-nowrap text-[var(--color-text-muted)]">Insights</p>
+                        <p className="text-[0.58rem] leading-none font-semibold uppercase tracking-[0.1em] whitespace-nowrap text-[var(--color-text-muted)]">Prompts</p>
                         <p className="text-[1.35rem] leading-none font-semibold text-[var(--color-text-primary)] mt-1">{insight.totalPrompts}</p>
                       </div>
                     </div>
@@ -1546,7 +1496,7 @@ function ClassManagementPanel({ currentUser }) {
                         <p className="text-lg font-semibold text-[var(--color-text-primary)]">{insight.activeStudents}</p>
                       </div>
                       <div className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 px-3 py-2">
-                        <p className="text-[0.68rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">Insights</p>
+                        <p className="text-[0.68rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">Prompts</p>
                         <p className="text-lg font-semibold text-[var(--color-text-primary)]">{insight.totalPrompts}</p>
                       </div>
                     </div>
@@ -2124,11 +2074,12 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
 
       try {
         const uid = encodeURIComponent(currentUser.uid)
-        const [moduleRes, classRows, studentRows, classModuleRows] = await Promise.all([
+        const [moduleRes, classRows, studentRows, classModuleRows, promptRows] = await Promise.all([
           fetch(apiUrl(`/modules?teacher_uid=${uid}`)),
           apiFetch('/classes', { user: currentUser }),
           apiFetch(`/class-students?teacher_uid=${uid}`, { user: currentUser }),
           apiFetch(`/class-modules?teacher_uid=${uid}`, { user: currentUser }),
+          apiFetch(`/prompts?teacher_uid=${uid}`, { user: currentUser }),
         ])
 
         const moduleData = await moduleRes.json()
@@ -2146,7 +2097,7 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
             .map((row) => row.studentUid || row.studentEmail)
             .filter(Boolean),
         ).size
-        const insightsCount = 0
+        const insightsCount = Array.isArray(promptRows) ? promptRows.length : 0
 
         setOverviewStats({
           activeStudents: String(uniqueStudents),
@@ -2246,7 +2197,7 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
                   <StatCard label="Active Students" value={overviewStats.activeStudents} tone="blue" />
                   <StatCard label="Modules" value={overviewStats.modules} tone="purple" />
                   <StatCard label="Classes" value={overviewStats.classes} tone="amber" />
-                  <StatCard label="Insights" value={overviewStats.insights} tone="green" />
+                  <StatCard label="Prompts" value={overviewStats.insights} tone="green" />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
