@@ -23,6 +23,7 @@ export default function StudentDashboard({ currentUser, onLogout }) {
         const normalized = (Array.isArray(cards) ? cards : []).map((card) => ({
           id: card.id,
           name: card.name,
+          teacherUid: card.teacher_uid ?? card.teacherUid ?? null,
           teacherName: card.teacher_name ?? card.teacherName ?? null,
           modules: (card.modules || []).map((m) => ({
             moduleId: m.moduleId ?? m.module_id,
@@ -146,6 +147,7 @@ export default function StudentDashboard({ currentUser, onLogout }) {
                             moduleId: module.moduleId,
                             moduleName: module.moduleName,
                             moduleDescription: module.moduleDescription || null,
+                            teacherUid: classCard.teacherUid || null,
                             teacherName: classCard.teacherName || null,
                           }
                           registerModule(module.moduleId, moduleData)

@@ -116,6 +116,7 @@ function StudentModuleView({ onLogout, currentUser }) {
             moduleId: data.id,
             moduleName: data.name,
             moduleDescription: data.description || null,
+            teacherUid: data.teacher_uid ?? null,
             teacherName: null,
           }
           registerModule(data.id, fallback)

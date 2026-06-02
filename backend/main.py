@@ -239,7 +239,7 @@ class ConversationResponse(BaseModel):
     answer: str
     session_id: str
     error: Optional[bool] = False
-    validation: Optional[dict] = None  # Validation metadata from GitHub models
+    validation: Optional[dict] = None  # Dual Gemini safety-validator votes
     flag_category: Optional[str] = None  # unsafe_content | validation_failure | system_error | none
     flag_severity: Optional[str] = None  # low | medium | high
     citations: list[CitationItem] = []
@@ -688,7 +688,7 @@ async def chat(
 
         answer = _generate_chat_response(contents, system_prompt)
 
-        # ---- Validation with GitHub models (required) ----
+        # ---- Dual Gemini safety validation (required) ----
         validation_result = None
         try:
             validation_result = validator.validate(question, answer)

@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from database.db import get_db
@@ -199,6 +200,26 @@ def put_me(body: UpdateProfileRequest, db: Session = Depends(get_db), uid: str =
 
 # ── Prompt logs (analytics) ───────────────────────────────────────────
 
+def _module_for_prompt(db: Session, module_id: Optional[str]) -> Optional[Module]:
+    if not module_id:
+        return None
+    return db.query(Module).filter(Module.id == module_id).first()
+
+
+def _resolve_prompt_context(
+    db: Session,
+    *,
+    teacher_uid: Optional[str],
+    module_id: Optional[str],
+    module_name: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
+    """Fill teacher_uid and module_name from the module record when the client omits them."""
+    mod = _module_for_prompt(db, module_id)
+    resolved_teacher = teacher_uid or (mod.teacher_uid if mod else None)
+    resolved_name = module_name or (mod.name if mod else None)
+    return resolved_teacher, resolved_name
+
+
 @router.post("/prompts")
 def create_prompt(
     body: PromptLogCreate,
@@ -207,10 +228,16 @@ def create_prompt(
 ):
     profile = db.query(UserProfile).filter(UserProfile.uid == uid).first()
     student_email = (profile.email or "").lower() if profile and profile.email else None
-    row = PromptLog(
+    teacher_uid, module_name = _resolve_prompt_context(
+        db,
         teacher_uid=body.teacher_uid,
         module_id=body.module_id,
         module_name=body.module_name,
+    )
+    row = PromptLog(
+        teacher_uid=teacher_uid,
+        module_id=body.module_id,
+        module_name=module_name,
         session_id=body.session_id,
         student_uid=uid,
         student_email=student_email,
@@ -228,9 +255,15 @@ def create_prompt(
 def list_prompts(teacher_uid: str, db: Session = Depends(get_db), uid: str = Depends(require_uid)):
     if teacher_uid != uid:
         raise HTTPException(status_code=403, detail="Forbidden")
+    owned_module_ids = db.query(Module.id).filter(Module.teacher_uid == teacher_uid)
     rows = (
         db.query(PromptLog)
-        .filter(PromptLog.teacher_uid == teacher_uid)
+        .filter(
+            or_(
+                PromptLog.teacher_uid == teacher_uid,
+                PromptLog.module_id.in_(owned_module_ids),
+            )
+        )
         .order_by(PromptLog.created_at.desc())
         .limit(5000)
         .all()
@@ -749,6 +782,7 @@ def student_dashboard(db: Session = Depends(get_db), student_uid: str = Depends(
             {
                 "id": class_id,
                 "name": cls.name if cls else "Class",
+                "teacher_uid": cls.teacher_uid if cls else None,
                 "teacher_name": cls.teacher_name if cls else None,
                 "modules": modules,
             }

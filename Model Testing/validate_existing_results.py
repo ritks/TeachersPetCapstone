@@ -3,7 +3,7 @@
 Validation script for existing model evaluation results.
 
 Reads an existing results xlsx file with responses already filled in,
-validates each response using two GitHub models, and adds validation
+validates each response using two Gemini validators (different safety prompts), and adds validation
 columns to the spreadsheet.
 
 This version properly detects rows where validators returned "error".

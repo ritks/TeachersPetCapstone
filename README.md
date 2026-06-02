@@ -10,7 +10,7 @@ An AI-powered math tutoring assistant for K–8 students. Teachers manage module
 |-------|-----------|
 | Frontend | React 19, Vite, Tailwind CSS |
 | Backend | FastAPI, SQLAlchemy, SQLite |
-| AI | Google Gemini (tutor + safety validator) |
+| AI | Google Gemini (tutor + dual safety validators) |
 | Auth & Database | Firebase Authentication + Firestore |
 | Document RAG | PyMuPDF, ChromaDB, Gemini Embeddings |
 
@@ -388,6 +388,6 @@ npx playwright show-report     # View test report
 
 ## Safety & Validation
 
-Every response from Gemini is validated by a Gemini safety-validation call before being returned to the student. If validation flags a response as unsafe, it is blocked and the student is asked to rephrase.
+Every response from Gemini is validated by **two** Gemini safety-validation calls before being returned to the student. Each call uses a different safety prompt (content-harm and child-welfare). **Both** must vote `safe`; if either flags unsafe or errors, the response is blocked and the student is asked to rephrase.
 
 This is configured in `backend/rag/validator.py` and uses the same `GEMINI_API_KEY` configured in `backend/.env`.
