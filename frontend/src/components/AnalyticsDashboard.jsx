@@ -67,7 +67,7 @@ function getFlagMeta(row) {
 }
 
 function getLearnerKey(promptRow) {
-  return promptRow.studentEmail || promptRow.studentUid || promptRow.courseCode || promptRow.sessionId || null
+  return promptRow.studentEmail || promptRow.studentUid || promptRow.sessionId || null
 }
 
 function getStudentLabel(row) {
@@ -172,7 +172,6 @@ export default function AnalyticsDashboard() {
           row.response,
           row.moduleName,
           row.moduleId,
-          row.courseCode,
           row.studentEmail,
         ].join(' ').toLowerCase()
         if (!haystack.includes(search)) return false
@@ -256,7 +255,6 @@ export default function AnalyticsDashboard() {
         const meta = getFlagMeta(row)
         return {
           module_name: row.moduleName || null,
-          course_code: row.courseCode || null,
           prompt: row.prompt || '',
           response: row.response || '',
           flag_category: meta.category,

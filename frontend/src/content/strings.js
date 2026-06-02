@@ -11,20 +11,10 @@ export const ENTRY_COPY = {
   heroSubtitle:
     'Get instant, step-by-step support that turns confusion into confidence.',
   studentTitle: "I'm a Student",
-  studentSubtitle: 'Enter your course code to start learning',
+  studentSubtitle: 'Sign in to access your enrolled classes',
   teacherTitle: "I'm a Teacher",
   teacherSubtitle: 'Manage modules and view analytics',
   visualAlt: "Teacher's Pet platform logo",
-}
-
-export const STUDENT_ENTRY_COPY = {
-  title: 'Join a Class',
-  subtitle: 'Enter the code your teacher gave you',
-  inputPlaceholder: 'e.g. ABC123',
-  submit: 'Join Class',
-  checking: 'Checking...',
-  invalidCode: 'Invalid code. Ask your teacher for the correct code.',
-  verifyError: 'Could not verify the code. Please check your connection and try again.',
 }
 
 export const STUDENT_LOGIN_COPY = {

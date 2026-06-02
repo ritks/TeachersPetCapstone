@@ -64,7 +64,7 @@ export default function DocumentPanel({ moduleId, documents, onDocumentsChanged 
   }
 
   return (
-    <div className="border-t border-gray-100 px-3 py-2">
+    <div className="px-3 py-2">
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Documents</span>
         <Button
@@ -85,9 +85,9 @@ export default function DocumentPanel({ moduleId, documents, onDocumentsChanged 
 
       <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
         {documents.map((doc) => (
-          <div key={doc.id} className="flex items-center justify-between gap-1 rounded-md bg-gray-50 px-2 py-1.5 text-xs">
+          <div key={doc.id} className="flex items-center justify-between gap-1 rounded-md bg-[var(--color-bg-muted)] px-2 py-1.5 text-xs">
             <div className="min-w-0 flex-1">
-              <span className="block truncate text-gray-700" title={doc.filename}>{doc.original_filename}</span>
+              <span className="block truncate text-[var(--color-text-primary)]" title={doc.filename}>{doc.original_filename}</span>
               {statusBadge(doc)}
             </div>
             <button

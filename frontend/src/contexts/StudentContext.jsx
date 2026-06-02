@@ -8,7 +8,7 @@ function loadStoredStudent() {
   if (!raw) return null
   try {
     const data = JSON.parse(raw)
-    if (data?.courseCode && data?.moduleId) return data
+    if (data?.moduleId) return data
   } catch {
     /* ignore */
   }

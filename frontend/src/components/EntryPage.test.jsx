@@ -16,7 +16,7 @@ vi.mock('../contexts/AuthContext', () => ({
   }),
 }))
 
-// Mock student context used by StudentEntryPage inside StudentLoginPage flow
+// Mock student context used by StudentLoginPage
 vi.mock('../contexts/StudentContext', () => ({
   useStudent: () => ({
     studentData: null,

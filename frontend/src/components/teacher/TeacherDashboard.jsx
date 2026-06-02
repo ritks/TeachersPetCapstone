@@ -7,6 +7,44 @@ import { apiFetch } from '../../lib/apiAuth'
 import DocumentPanel from './DocumentPanel'
 import ThemeToggleButton from '../common/ThemeToggleButton'
 
+// Eye / lock icon toggle reused for both group-level and per-student SEE / ACCESS controls.
+function AccessToggle({ kind, active, onClick, title }) {
+  const isSee = kind === 'see'
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={active}
+      className={[
+        'inline-flex items-center justify-center w-7 h-7 rounded-md border transition-colors',
+        active
+          ? 'border-[var(--color-brand-600)] bg-[var(--color-brand-600)] text-white'
+          : 'border-[var(--color-border-card)] bg-[var(--color-bg-muted)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]',
+      ].join(' ')}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {isSee ? (
+          <>
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+            <circle cx="12" cy="12" r="3" />
+          </>
+        ) : active ? (
+          <>
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+          </>
+        ) : (
+          <>
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </>
+        )}
+      </svg>
+    </button>
+  )
+}
+
 function DashboardCard({ title, description, icon, tag, tagTone = 'neutral', cta = 'Open', onClick }) {
   const ctaText = onClick ? `${cta} →` : 'Coming soon →'
   return (
@@ -79,6 +117,7 @@ function ClassManagementPanel({ currentUser }) {
   const [deletingModuleId, setDeletingModuleId] = useState(null)
   const [moduleSearchTerm, setModuleSearchTerm] = useState('')
   const [moduleStatusFilter, setModuleStatusFilter] = useState('all')
+  const [studentAccessSearch, setStudentAccessSearch] = useState({})
   const [classStatusFilter, setClassStatusFilter] = useState('active')
   const [archivingClassId, setArchivingClassId] = useState(null)
   const [deletingClassId, setDeletingClassId] = useState(null)
@@ -140,6 +179,16 @@ function ClassManagementPanel({ currentUser }) {
 
   const moduleGroupKey = (classId, moduleId) => `${classId}::${moduleId}`
   const moduleStudentKey = (classId, moduleId, studentEmail) => `${classId}::${moduleId}::${studentEmail}`
+
+  // moduleGroupAccess[key] is { accessGroupIds, seeGroupIds }. Tolerate the legacy array shape.
+  const getGroupAccess = (key) => {
+    const value = moduleGroupAccess[key]
+    if (Array.isArray(value)) return { accessGroupIds: value, seeGroupIds: [] }
+    return {
+      accessGroupIds: value?.accessGroupIds || [],
+      seeGroupIds: value?.seeGroupIds || [],
+    }
+  }
 
   const fetchDocumentsForModule = async (moduleId) => {
     try {
@@ -259,6 +308,7 @@ function ClassManagementPanel({ currentUser }) {
       ;[...remoteAccess, ...localAccess].forEach((row) => {
         if (!row.classId || !row.moduleId || !row.studentEmail) return
         accessMap[moduleStudentKey(row.classId, row.moduleId, row.studentEmail)] = {
+          canSee: Boolean(row.canSee) || Boolean(row.isUnlocked),
           isUnlocked: Boolean(row.isUnlocked),
           source: row.source || 'group',
         }
@@ -293,9 +343,10 @@ function ClassManagementPanel({ currentUser }) {
       const groupAccessMap = {}
       ;[...remoteGroupAccess, ...localGroupAccess].forEach((row) => {
         if (!row.classId || !row.moduleId) return
-        groupAccessMap[moduleGroupKey(row.classId, row.moduleId)] = Array.isArray(row.groupIds)
-          ? [...new Set(row.groupIds.filter(Boolean))]
-          : []
+        groupAccessMap[moduleGroupKey(row.classId, row.moduleId)] = {
+          accessGroupIds: Array.isArray(row.groupIds) ? [...new Set(row.groupIds.filter(Boolean))] : [],
+          seeGroupIds: Array.isArray(row.seeGroupIds) ? [...new Set(row.seeGroupIds.filter(Boolean))] : [],
+        }
       })
       setModuleGroupAccess(groupAccessMap)
 
@@ -307,7 +358,7 @@ function ClassManagementPanel({ currentUser }) {
         const classPrompts = promptDocs.filter((p) => p.moduleId && moduleIds.has(p.moduleId))
         const activeStudents = new Set(
           classPrompts
-            .map((p) => p.courseCode || p.sessionId)
+            .map((p) => p.sessionId)
             .filter(Boolean),
         ).size
         const latestTs = classPrompts.reduce((acc, p) => {
@@ -1047,28 +1098,19 @@ function ClassManagementPanel({ currentUser }) {
         writeLocal(localGroupsKey, localGroups.filter((row) => row.id !== groupItem.id))
       }
 
-      // 2. Remove this groupId from moduleGroupAccess for all modules in this class
+      // 2. Remove this groupId from every module's see/access lists in this class
       const classModuleList = modulesByClass[classId] || []
       await Promise.all(
         classModuleList.map(async (moduleItem) => {
-          const key = moduleGroupKey(classId, moduleItem.id)
-          const currentGroupIds = moduleGroupAccess[key] || []
-          if (!currentGroupIds.includes(groupItem.id)) return
-          const nextGroupIds = currentGroupIds.filter((id) => id !== groupItem.id)
-          const accessDocId = `${classId}_${moduleItem.id}`.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 120)
-          try {
-            await setDoc(doc(db, 'moduleGroupAccess', accessDocId), {
-              groupIds: nextGroupIds,
-              updatedAt: serverTimestamp(),
-            }, { merge: true })
-          } catch {
-            const localGroupAccess = readLocal(localGroupAccessKey, [])
-            const idx = localGroupAccess.findIndex((row) => row.classId === classId && row.moduleId === moduleItem.id)
-            if (idx >= 0) {
-              localGroupAccess[idx] = { ...localGroupAccess[idx], groupIds: nextGroupIds }
-              writeLocal(localGroupAccessKey, localGroupAccess)
-            }
-          }
+          const { accessGroupIds, seeGroupIds } = getGroupAccess(moduleGroupKey(classId, moduleItem.id))
+          if (!accessGroupIds.includes(groupItem.id) && !seeGroupIds.includes(groupItem.id)) return
+          await commitGroupAccess({
+            classId,
+            moduleItem,
+            nextSeeGroupIds: seeGroupIds.filter((id) => id !== groupItem.id),
+            nextAccessGroupIds: accessGroupIds.filter((id) => id !== groupItem.id),
+            touchedGroupId: groupItem.id,
+          })
         }),
       )
 
@@ -1077,15 +1119,6 @@ function ClassManagementPanel({ currentUser }) {
         ...prev,
         [classId]: (prev[classId] || []).filter((g) => g.id !== groupItem.id),
       }))
-      setModuleGroupAccess((prev) => {
-        const next = { ...prev }
-        Object.keys(next).forEach((key) => {
-          if (key.startsWith(`${classId}::`)) {
-            next[key] = (next[key] || []).filter((id) => id !== groupItem.id)
-          }
-        })
-        return next
-      })
     } catch {
       setErrorMessage('Could not delete group.')
     } finally {
@@ -1137,161 +1170,147 @@ function ClassManagementPanel({ currentUser }) {
     }
   }
 
-  const handleToggleGroupForModule = async ({ classId, moduleItem, groupId }) => {
-    if (!currentUser || !moduleItem?.id || !groupId) return
-
-    const key = moduleGroupKey(classId, moduleItem.id)
-    const assigned = moduleGroupAccess[key] || []
-    const nextGroupIds = assigned.includes(groupId)
-      ? assigned.filter((id) => id !== groupId)
-      : [...assigned, groupId]
+  // Recompute and persist a module's group SEE/ACCESS lists, materializing each
+  // affected student's row. A student is visible if they belong to any see- or
+  // access-group; openable only if in an access-group. Students who aren't in any
+  // group involved are left untouched (their individual settings persist).
+  const commitGroupAccess = async ({ classId, moduleItem, nextSeeGroupIds, nextAccessGroupIds, touchedGroupId }) => {
     const classGroups = groupsByClass[classId] || []
-    const classStudents = studentsByClass[classId] || []
-    const allowedEmails = new Set(
-      classGroups
-        .filter((groupItem) => nextGroupIds.includes(groupItem.id))
-        .flatMap((groupItem) => Array.isArray(groupItem.members) ? groupItem.members : [])
-        .filter(Boolean),
-    )
-    const allClassEmails = [...new Set(classStudents.map((row) => row.studentEmail).filter(Boolean))]
-    const groupManagedEmails = allClassEmails.filter((email) => {
-      const keyForStudent = moduleStudentKey(classId, moduleItem.id, email)
-      return moduleAccessByKey[keyForStudent]?.source !== 'manual'
-    })
+    const membersOf = (groupId) => {
+      const group = classGroups.find((g) => g.id === groupId)
+      return Array.isArray(group?.members) ? group.members.filter(Boolean) : []
+    }
+    const emailsIn = (groupIds) => new Set(groupIds.flatMap(membersOf))
+    const seeEmails = emailsIn(nextSeeGroupIds)
+    const accessEmails = emailsIn(nextAccessGroupIds)
+    const affected = new Set([
+      ...seeEmails,
+      ...accessEmails,
+      ...(touchedGroupId ? membersOf(touchedGroupId) : []),
+    ])
 
     try {
-      try {
-        await apiFetch('/module-group-access', {
+      await apiFetch('/module-group-access', {
+        user: currentUser,
+        method: 'POST',
+        body: {
+          class_id: classId,
+          module_id: moduleItem.id,
+          group_ids: nextAccessGroupIds,
+          see_group_ids: nextSeeGroupIds,
+        },
+      })
+      await Promise.all(
+        [...affected].map((email) => apiFetch('/module-access', {
           user: currentUser,
           method: 'POST',
           body: {
             class_id: classId,
             module_id: moduleItem.id,
-            group_ids: nextGroupIds,
-          },
-        })
-
-        await Promise.all(
-          groupManagedEmails.map((email) => apiFetch('/module-access', {
-            user: currentUser,
-            method: 'POST',
-            body: {
-              class_id: classId,
-              module_id: moduleItem.id,
-              student_email: email,
-              is_unlocked: allowedEmails.has(email),
-              source: 'group',
-            },
-          })),
-        )
-      } catch {
-        const localGroupAccess = readLocal(localGroupAccessKey, [])
-        const idx = localGroupAccess.findIndex((row) => row.classId === classId && row.moduleId === moduleItem.id)
-        const payload = {
-          classId,
-          className: classes.find((c) => c.id === classId)?.name || null,
-          moduleId: moduleItem.id,
-          moduleName: moduleItem.name || null,
-          teacherUid: currentUser.uid,
-          groupIds: nextGroupIds,
-          updatedAt: null,
-        }
-        if (idx >= 0) localGroupAccess[idx] = { ...localGroupAccess[idx], ...payload }
-        else localGroupAccess.unshift(payload)
-        writeLocal(localGroupAccessKey, localGroupAccess)
-
-        const localAccess = readLocal(localAccessKey, [])
-        groupManagedEmails.forEach((email) => {
-          const existingIdx = localAccess.findIndex((row) => row.classId === classId && row.moduleId === moduleItem.id && row.studentEmail === email)
-          const nextRow = {
-            classId,
-            className: classes.find((c) => c.id === classId)?.name || null,
-            moduleId: moduleItem.id,
-            moduleName: moduleItem.name || null,
-            teacherUid: currentUser.uid,
-            studentEmail: email,
-            isUnlocked: allowedEmails.has(email),
+            student_email: email,
+            can_see: seeEmails.has(email) || accessEmails.has(email),
+            is_unlocked: accessEmails.has(email),
             source: 'group',
-            updatedAt: Date.now(),
-          }
-          if (existingIdx >= 0) localAccess[existingIdx] = { ...localAccess[existingIdx], ...nextRow }
-          else localAccess.unshift(nextRow)
-        })
-        writeLocal(localAccessKey, localAccess)
-        setInfoMessage('Group module access saved locally (cloud permissions blocked).')
-      }
+          },
+        })),
+      )
 
-      setModuleGroupAccess((prev) => ({ ...prev, [key]: nextGroupIds }))
+      const key = moduleGroupKey(classId, moduleItem.id)
+      setModuleGroupAccess((prev) => ({
+        ...prev,
+        [key]: { accessGroupIds: nextAccessGroupIds, seeGroupIds: nextSeeGroupIds },
+      }))
       setModuleAccessByKey((prev) => {
         const next = { ...prev }
-        groupManagedEmails.forEach((email) => {
-          const studentKey = moduleStudentKey(classId, moduleItem.id, email)
-          next[studentKey] = {
-            isUnlocked: allowedEmails.has(email),
+        affected.forEach((email) => {
+          next[moduleStudentKey(classId, moduleItem.id, email)] = {
+            canSee: seeEmails.has(email) || accessEmails.has(email),
+            isUnlocked: accessEmails.has(email),
             source: 'group',
           }
         })
         return next
       })
     } catch {
-      setErrorMessage('Could not update module access for selected groups.')
+      setErrorMessage('Could not update group module access.')
     }
   }
 
-  const handleToggleIndividualModuleAccess = async ({ classId, moduleItem, studentEmail }) => {
-    if (!currentUser || !classId || !moduleItem?.id || !studentEmail) return
+  const handleToggleGroupSee = ({ classId, moduleItem, groupId }) => {
+    if (!currentUser || !moduleItem?.id || !groupId) return
+    const { accessGroupIds, seeGroupIds } = getGroupAccess(moduleGroupKey(classId, moduleItem.id))
+    const nextSeeGroupIds = seeGroupIds.includes(groupId)
+      ? seeGroupIds.filter((id) => id !== groupId)
+      : [...seeGroupIds, groupId]
+    return commitGroupAccess({ classId, moduleItem, nextSeeGroupIds, nextAccessGroupIds: accessGroupIds, touchedGroupId: groupId })
+  }
 
-    const classGroups = groupsByClass[classId] || []
-    const assignedGroups = moduleGroupAccess[moduleGroupKey(classId, moduleItem.id)] || []
-    const groupDerivedUnlocked = classGroups
-      .filter((groupItem) => assignedGroups.includes(groupItem.id))
-      .some((groupItem) => (groupItem.members || []).includes(studentEmail))
+  const handleToggleGroupAccess = ({ classId, moduleItem, groupId }) => {
+    if (!currentUser || !moduleItem?.id || !groupId) return
+    const { accessGroupIds, seeGroupIds } = getGroupAccess(moduleGroupKey(classId, moduleItem.id))
+    const turningOn = !accessGroupIds.includes(groupId)
+    const nextAccessGroupIds = turningOn
+      ? [...accessGroupIds, groupId]
+      : accessGroupIds.filter((id) => id !== groupId)
+    // Access implies see: keep the group in the see-list while it has access.
+    const nextSeeGroupIds = turningOn
+      ? [...new Set([...seeGroupIds, groupId])]
+      : seeGroupIds
+    return commitGroupAccess({ classId, moduleItem, nextSeeGroupIds, nextAccessGroupIds, touchedGroupId: groupId })
+  }
 
+  const commitStudentAccess = async ({ classId, moduleItem, studentEmail, canSee, isUnlocked }) => {
     const key = moduleStudentKey(classId, moduleItem.id, studentEmail)
-    const existing = moduleAccessByKey[key]
-    const currentUnlocked = existing?.source === 'manual' ? Boolean(existing.isUnlocked) : groupDerivedUnlocked
-    const nextUnlocked = !currentUnlocked
-
     try {
-      try {
-        await apiFetch('/module-access', {
-          user: currentUser,
-          method: 'POST',
-          body: {
-            class_id: classId,
-            module_id: moduleItem.id,
-            student_email: studentEmail,
-            is_unlocked: nextUnlocked,
-            source: 'manual',
-          },
-        })
-      } catch {
-        const localAccess = readLocal(localAccessKey, [])
-        const idx = localAccess.findIndex((row) => row.classId === classId && row.moduleId === moduleItem.id && row.studentEmail === studentEmail)
-        const payload = {
-          classId,
-          className: classes.find((c) => c.id === classId)?.name || null,
-          moduleId: moduleItem.id,
-          moduleName: moduleItem.name || null,
-          teacherUid: currentUser.uid,
-          studentEmail,
-          isUnlocked: nextUnlocked,
+      await apiFetch('/module-access', {
+        user: currentUser,
+        method: 'POST',
+        body: {
+          class_id: classId,
+          module_id: moduleItem.id,
+          student_email: studentEmail,
+          can_see: canSee,
+          is_unlocked: isUnlocked,
           source: 'manual',
-          updatedAt: null,
-        }
-        if (idx >= 0) localAccess[idx] = { ...localAccess[idx], ...payload }
-        else localAccess.unshift(payload)
-        writeLocal(localAccessKey, localAccess)
-        setInfoMessage('Individual module access saved locally (cloud permissions blocked).')
-      }
-
+        },
+      })
       setModuleAccessByKey((prev) => ({
         ...prev,
-        [key]: { isUnlocked: nextUnlocked, source: 'manual' },
+        [key]: { canSee, isUnlocked, source: 'manual' },
       }))
     } catch {
       setErrorMessage('Could not update individual module access.')
     }
+  }
+
+  const handleToggleStudentSee = ({ classId, moduleItem, studentEmail }) => {
+    if (!currentUser || !classId || !moduleItem?.id || !studentEmail) return
+    const current = moduleAccessByKey[moduleStudentKey(classId, moduleItem.id, studentEmail)]
+    const curUnlocked = current?.isUnlocked === true
+    const nextCanSee = current?.canSee !== true
+    // Removing visibility also removes access.
+    return commitStudentAccess({
+      classId,
+      moduleItem,
+      studentEmail,
+      canSee: nextCanSee,
+      isUnlocked: nextCanSee ? curUnlocked : false,
+    })
+  }
+
+  const handleToggleStudentAccess = ({ classId, moduleItem, studentEmail }) => {
+    if (!currentUser || !classId || !moduleItem?.id || !studentEmail) return
+    const current = moduleAccessByKey[moduleStudentKey(classId, moduleItem.id, studentEmail)]
+    const curSee = current?.canSee === true
+    const nextUnlocked = current?.isUnlocked !== true
+    // Granting access implies visibility.
+    return commitStudentAccess({
+      classId,
+      moduleItem,
+      studentEmail,
+      canSee: nextUnlocked ? true : curSee,
+      isUnlocked: nextUnlocked,
+    })
   }
 
   const formatLatestActivity = (tsMillis) => {
@@ -1424,12 +1443,11 @@ function ClassManagementPanel({ currentUser }) {
                 const insight = insightsByClass[classItem.id] || { modules: 0, activeStudents: 0, totalPrompts: 0 }
                 const isArchived = (classItem.status || 'active') === 'archived'
                 return (
-                  <Card
+                  <div
                     key={classItem.id}
-                    interactive={!isArchived}
                     onClick={() => !isArchived && setSelectedClassId(classItem.id)}
                     className={[
-                      'p-5 border-[var(--color-border-card-subtle)] tp-card-surface transition-all',
+                      'rounded-xl border border-[var(--color-border-card-subtle)] bg-white/65 p-3 transition-all',
                       isArchived ? 'opacity-80' : 'cursor-pointer hover:-translate-y-0.5',
                     ].join(' ')}
                   >
@@ -1466,7 +1484,7 @@ function ClassManagementPanel({ currentUser }) {
                       )}
                       {renderClassActions(classItem, { compact: true })}
                     </div>
-                  </Card>
+                  </div>
                 )
               })}
             </div>
@@ -1799,20 +1817,36 @@ function ClassManagementPanel({ currentUser }) {
                             </div>
                           ) : (
                             filteredModules.map((moduleItem) => {
-                              const assignedGroups = moduleGroupAccess[moduleGroupKey(classItem.id, moduleItem.id)] || []
-                              const allowedEmails = new Set(
-                                classGroups
-                                  .filter((groupItem) => assignedGroups.includes(groupItem.id))
-                                  .flatMap((groupItem) => Array.isArray(groupItem.members) ? groupItem.members : [])
-                                  .filter(Boolean),
-                              )
+                              const { seeGroupIds, accessGroupIds } = getGroupAccess(moduleGroupKey(classItem.id, moduleItem.id))
+                              const accessForStudent = (email) => moduleAccessByKey[moduleStudentKey(classItem.id, moduleItem.id, email)]
+                              const seenCount = classStudents.filter((s) => accessForStudent(s.studentEmail)?.canSee).length
+                              const unlockedCount = classStudents.filter((s) => accessForStudent(s.studentEmail)?.isUnlocked).length
+                              const accessSearch = (studentAccessSearch[moduleItem.id] || '').trim().toLowerCase()
+                              const accessStudents = accessSearch
+                                ? classStudents.filter((s) => (
+                                    (s.studentName || '').toLowerCase().includes(accessSearch)
+                                    || (s.studentEmail || '').toLowerCase().includes(accessSearch)
+                                  ))
+                                : classStudents
 
                               return (
                                 <div key={moduleItem.id} className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 p-3">
+                                  <div
+                                    className="cursor-pointer"
+                                    onClick={async () => {
+                                      const next = !openDocumentsByModule[moduleItem.id]
+                                      setOpenDocumentsByModule((prev) => ({ ...prev, [moduleItem.id]: next }))
+                                      if (next) await fetchDocumentsForModule(moduleItem.id)
+                                    }}
+                                  >
                                   <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-2 min-w-0">
+                                    <span className="text-lg leading-none text-[var(--color-text-muted)] select-none mt-0.5" aria-hidden="true">
+                                      {openDocumentsByModule[moduleItem.id] ? '−' : '+'}
+                                    </span>
                                     <div className="min-w-0">
                                       {editingModuleNameId === moduleItem.id ? (
-                                        <div className="flex items-center gap-1.5 mb-1">
+                                        <div className="flex items-center gap-1.5 mb-1" onClick={(e) => e.stopPropagation()}>
                                           <Input
                                             value={editingModuleNameValue}
                                             onChange={(e) => setEditingModuleNameValue(e.target.value)}
@@ -1842,7 +1876,7 @@ function ClassManagementPanel({ currentUser }) {
                                         <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{moduleItem.name}</p>
                                       )}
                                       {editingModuleDescriptionId === moduleItem.id ? (
-                                        <div className="mt-1.5 flex flex-col gap-2">
+                                        <div className="mt-1.5 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
                                           <Input
                                             value={editingModuleDescriptionValue}
                                             onChange={(e) => setEditingModuleDescriptionValue(e.target.value)}
@@ -1879,7 +1913,8 @@ function ClassManagementPanel({ currentUser }) {
                                         <p className="text-xs text-[var(--color-text-muted)] mt-0.5 italic">No description yet.</p>
                                       )}
                                     </div>
-                                    <div className="flex items-center gap-1.5">
+                                    </div>
+                                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                       <Badge tone={moduleItem.moduleStatus === 'archived' ? 'warning' : 'neutral'}>
                                         {moduleItem.moduleStatus === 'archived' ? 'Archived' : 'Module'}
                                       </Badge>
@@ -1928,102 +1963,118 @@ function ClassManagementPanel({ currentUser }) {
                                     </div>
                                   </div>
 
-                                  <div className="mt-2.5 flex items-center justify-between gap-2">
-                                    <Badge tone="neutral">
-                                      {allowedEmails.size} unlocked
-                                    </Badge>
-                                    <Button
-                                      type="button"
-                                      variant="secondary"
-                                      size="sm"
-                                      onClick={async () => {
-                                        const next = !openDocumentsByModule[moduleItem.id]
-                                        setOpenDocumentsByModule((prev) => ({ ...prev, [moduleItem.id]: next }))
-                                        if (next) await fetchDocumentsForModule(moduleItem.id)
-                                      }}
-                                    >
-                                      {openDocumentsByModule[moduleItem.id] ? 'Hide documents' : 'Documents'}
-                                    </Button>
+                                  <div className="mt-2.5 flex items-center gap-1.5">
+                                    <Badge tone="neutral">Viewable: {seenCount}</Badge>
+                                    <Badge tone="brand">Unlocked: {unlockedCount}</Badge>
+                                  </div>
                                   </div>
 
-                                  {openDocumentsByModule[moduleItem.id] && (
-                                    <div className="mt-3 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/80">
-                                      <DocumentPanel
-                                        moduleId={moduleItem.id}
-                                        documents={documentsByModule[moduleItem.id] || []}
-                                        onDocumentsChanged={() => fetchDocumentsForModule(moduleItem.id)}
-                                      />
-                                    </div>
-                                  )}
+                                  <div
+                                    className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+                                    style={{ gridTemplateRows: openDocumentsByModule[moduleItem.id] ? '1fr' : '0fr' }}
+                                  >
+                                  <div className="min-h-0 overflow-hidden">
+                                  <div className="mt-3 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/80">
+                                    <DocumentPanel
+                                      moduleId={moduleItem.id}
+                                      documents={documentsByModule[moduleItem.id] || []}
+                                      onDocumentsChanged={() => fetchDocumentsForModule(moduleItem.id)}
+                                    />
+                                  </div>
 
                                   <div className="mt-2.5">
                                     <p className="tp-eyebrow mb-1.5">
                                       Assign Groups
                                     </p>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {classGroups.length === 0 ? (
-                                        <span className="text-xs text-[var(--color-text-muted)]">Create groups first in the Groups tab.</span>
-                                      ) : (
-                                        classGroups.map((groupItem) => {
-                                          const selected = assignedGroups.includes(groupItem.id)
-                                          return (
-                                            <Button
-                                              key={`${moduleItem.id}-${groupItem.id}`}
-                                              type="button"
-                                              variant={selected ? 'primary' : 'secondary'}
-                                              size="sm"
-                                              className="text-[0.74rem] px-2.5 py-1"
-                                              onClick={() => handleToggleGroupForModule({
-                                                classId: classItem.id,
-                                                moduleItem,
-                                                groupId: groupItem.id,
-                                              })}
-                                            >
-                                              {selected ? `Assigned: ${groupItem.name}` : `Assign: ${groupItem.name}`}
-                                            </Button>
-                                          )
-                                        })
-                                      )}
-                                    </div>
+                                    {classGroups.length === 0 ? (
+                                      <span className="text-xs text-[var(--color-text-muted)]">Create groups first in the Groups tab.</span>
+                                    ) : (
+                                      <div className="space-y-1.5">
+                                        {classGroups.map((groupItem) => (
+                                          <div
+                                            key={`${moduleItem.id}-${groupItem.id}`}
+                                            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 px-2.5 py-1.5"
+                                          >
+                                            <span className="text-sm text-[var(--color-text-secondary)] truncate">
+                                              {groupItem.name}
+                                              <span className="text-[var(--color-text-muted)]"> · Number of Students: {(groupItem.members || []).length}</span>
+                                            </span>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                              <AccessToggle
+                                                kind="see"
+                                                active={seeGroupIds.includes(groupItem.id) || accessGroupIds.includes(groupItem.id)}
+                                                title="Group can see this module"
+                                                onClick={() => handleToggleGroupSee({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
+                                              />
+                                              <AccessToggle
+                                                kind="access"
+                                                active={accessGroupIds.includes(groupItem.id)}
+                                                title="Group can open this module"
+                                                onClick={() => handleToggleGroupAccess({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
+                                              />
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
 
                                   {classStudents.length > 0 && (
                                     <div className="mt-3 rounded-lg border border-[var(--color-border-card-subtle)] bg-[var(--color-bg-muted)] p-2.5">
                                       <p className="tp-eyebrow mb-1.5">
-                                        Individual Overrides
+                                        Student Access
                                       </p>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {classStudents.map((studentRow) => {
-                                          const email = studentRow.studentEmail
-                                          const key = moduleStudentKey(classItem.id, moduleItem.id, email)
-                                          const access = moduleAccessByKey[key]
-                                          const groupDerivedUnlocked = classGroups
-                                            .filter((groupItem) => assignedGroups.includes(groupItem.id))
-                                            .some((groupItem) => (groupItem.members || []).includes(email))
-                                          const unlocked = access?.source === 'manual'
-                                            ? Boolean(access?.isUnlocked)
-                                            : groupDerivedUnlocked
-                                          const prefix = access?.source === 'manual' ? 'Manual' : 'Group'
-                                          return (
-                                            <Button
-                                              key={`${moduleItem.id}-manual-${email}`}
-                                              type="button"
-                                              size="sm"
-                                              variant={unlocked ? 'primary' : 'secondary'}
-                                              className="text-[0.74rem] px-2.5 py-1"
-                                              onClick={() => handleToggleIndividualModuleAccess({
-                                                classId: classItem.id,
-                                                moduleItem,
-                                                studentEmail: email,
-                                              })}
-                                            >
-                                              {`${prefix}: ${email}`}
-                                            </Button>
-                                          )
-                                        })}
+                                      <Input
+                                        value={studentAccessSearch[moduleItem.id] || ''}
+                                        onChange={(e) => setStudentAccessSearch((prev) => ({ ...prev, [moduleItem.id]: e.target.value }))}
+                                        placeholder="Search students by name or email..."
+                                        className="text-sm mb-2"
+                                      />
+                                      <div className="max-h-64 overflow-y-auto space-y-1.5 pr-0.5">
+                                        {accessStudents.length === 0 ? (
+                                          <span className="text-xs text-[var(--color-text-muted)]">No students match.</span>
+                                        ) : (
+                                          accessStudents.map((studentRow) => {
+                                            const email = studentRow.studentEmail
+                                            const access = accessForStudent(email)
+                                            const canSee = access?.canSee === true
+                                            const isUnlocked = access?.isUnlocked === true
+                                            return (
+                                              <div
+                                                key={`${moduleItem.id}-access-${email}`}
+                                                className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/80 px-2.5 py-1.5"
+                                              >
+                                                <div className="min-w-0">
+                                                  <p className="text-sm font-medium text-[var(--color-text-primary)] truncate">
+                                                    {studentRow.studentName || email}
+                                                  </p>
+                                                  {studentRow.studentName && (
+                                                    <p className="text-xs text-[var(--color-text-muted)] truncate">{email}</p>
+                                                  )}
+                                                </div>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                  <AccessToggle
+                                                    kind="see"
+                                                    active={canSee}
+                                                    title="Student can see this module"
+                                                    onClick={() => handleToggleStudentSee({ classId: classItem.id, moduleItem, studentEmail: email })}
+                                                  />
+                                                  <AccessToggle
+                                                    kind="access"
+                                                    active={isUnlocked}
+                                                    title="Student can open this module"
+                                                    onClick={() => handleToggleStudentAccess({ classId: classItem.id, moduleItem, studentEmail: email })}
+                                                  />
+                                                </div>
+                                              </div>
+                                            )
+                                          })
+                                        )}
                                       </div>
                                     </div>
                                   )}
+                                  </div>
+                                  </div>
                                 </div>
                               )
                             })
@@ -2108,8 +2159,8 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
 
   return (
     <div className="min-h-screen relative overflow-x-hidden bg-[var(--color-bg-canvas)]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_84%_14%,rgba(65,90,119,0.34),rgba(65,90,119,0)_54%)]" />
-      <div className="absolute inset-0 bg-[linear-gradient(122deg,rgba(27,38,59,0.14),rgba(27,38,59,0.02)_42%,rgba(65,90,119,0.2)_100%)]" />
+      <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_84%_14%,rgba(65,90,119,0.34),rgba(65,90,119,0)_54%)]" />
+      <div className="fixed inset-0 pointer-events-none bg-[linear-gradient(122deg,rgba(27,38,59,0.14),rgba(27,38,59,0.02)_42%,rgba(65,90,119,0.2)_100%)]" />
 
       <header className="relative z-10 border-b border-[var(--color-border-card-subtle)] tp-header-surface backdrop-blur-md">
         <div className="max-w-[1240px] mx-auto px-6 py-4 flex items-center justify-between">

@@ -6,6 +6,8 @@ import os
 import json
 import time
 from dotenv import load_dotenv
+load_dotenv()
+
 from google.genai import types
 from pydantic import BaseModel
 from typing import Optional
@@ -22,8 +24,6 @@ from rag.vector_store import VectorStore
 from rag.retriever import Retriever
 from rag.document_processor import DocumentProcessor
 from rag.validator import ResponseValidator
-
-load_dotenv()
 
 app = FastAPI(title="Teachers Pet - Math Tutor")
 
@@ -315,7 +315,6 @@ class TextUpload(BaseModel):
 
 class AnalyticsSummaryItem(BaseModel):
     module_name: Optional[str] = None
-    course_code: Optional[str] = None
     prompt: str
     response: str
     flag_category: Optional[str] = None

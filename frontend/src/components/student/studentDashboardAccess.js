@@ -10,7 +10,6 @@ export function buildStudentClassCards({
   accessRows = [],
   classDocs = [],
   classNameByClassId = {},
-  codeRows = [],
   enrollments = [],
   groupRows = [],
   moduleGroupAccessRows = [],
@@ -20,7 +19,6 @@ export function buildStudentClassCards({
 }) {
   const normalizedStudentEmail = normalizeEmail(studentEmail)
   const accessMap = {}
-  const courseCodeByModuleKey = {}
   const groupIdsForStudentByClass = {}
   const groupAccessMap = {}
 
@@ -28,12 +26,6 @@ export function buildStudentClassCards({
     if (!row.classId || !row.moduleId) return
     accessMap[keyFor(row.classId, row.moduleId)] = Boolean(row.isUnlocked)
     if (row.className && !classNameByClassId[row.classId]) classNameByClassId[row.classId] = row.className
-  })
-
-  codeRows.forEach((row) => {
-    if (!row.classId || !row.moduleId) return
-    if (row.className && !classNameByClassId[row.classId]) classNameByClassId[row.classId] = row.className
-    courseCodeByModuleKey[keyFor(row.classId, row.moduleId)] = row.code
   })
 
   enrollments.forEach((row) => {
@@ -69,16 +61,9 @@ export function buildStudentClassCards({
         moduleName: a.moduleName || 'Module',
         moduleStatus: 'active',
       }))
-    const fromCodes = codeRows
-      .filter((c) => c.classId === classDoc.id)
-      .map((c) => ({
-        moduleId: c.moduleId,
-        moduleName: c.moduleName || 'Module',
-        moduleStatus: 'active',
-      }))
 
     const seen = new Set()
-    const classModules = [...fromClassModules, ...fromAccess, ...fromCodes].filter((m) => {
+    const classModules = [...fromClassModules, ...fromAccess].filter((m) => {
       if (!m.moduleId || seen.has(m.moduleId)) return false
       seen.add(m.moduleId)
       return true
@@ -97,7 +82,6 @@ export function buildStudentClassCards({
         moduleDescription: moduleMeta?.description || null,
         moduleStatus: m.moduleStatus || 'active',
         unlocked,
-        courseCode: courseCodeByModuleKey[moduleKey] || null,
       }
     })
 
