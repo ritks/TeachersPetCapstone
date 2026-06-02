@@ -1552,7 +1552,7 @@ function ClassManagementPanel({ currentUser }) {
                     </div>
 
                     <p className="text-xs text-[var(--color-text-muted)] mt-3">{formatLatestActivity(insight.latestTs)}</p>
-                    <div className="mt-4 rounded-xl border border-[var(--color-border-card)] bg-[rgba(255,255,255,0.46)] p-2 grid grid-cols-3 gap-1.5">
+                    <div className="mt-4 rounded-xl border border-[var(--color-border-card)] bg-[rgba(255,255,255,0.46)] p-1.5 sm:p-2 grid grid-cols-3 gap-1 sm:gap-1.5">
                       <Button
                         type="button"
                         size="sm"
@@ -1592,7 +1592,7 @@ function ClassManagementPanel({ currentUser }) {
                           Add students once here, then assign module access through groups.
                         </p>
 
-                        <div className="mt-2 flex gap-2">
+                        <div className="mt-2 flex flex-col sm:flex-row gap-2">
                           <Input
                             value={studentDraft}
                             onChange={(e) => updateStudentDraft(classItem.id, e.target.value)}
@@ -1602,6 +1602,7 @@ function ClassManagementPanel({ currentUser }) {
                             type="button"
                             variant="secondary"
                             size="sm"
+                            className="w-full sm:w-auto"
                             disabled={!studentDraft.trim() || addingStudentForClass === classItem.id}
                             onClick={() => handleAddStudentToClass(classItem.id)}
                           >
@@ -1642,7 +1643,7 @@ function ClassManagementPanel({ currentUser }) {
                           Build reusable groups once, then assign groups to modules in one click.
                         </p>
 
-                        <div className="mt-2 flex gap-2">
+                        <div className="mt-2 flex flex-col sm:flex-row gap-2">
                           <Input
                             value={groupDraft}
                             onChange={(e) => updateGroupDraft(classItem.id, e.target.value)}
@@ -1652,6 +1653,7 @@ function ClassManagementPanel({ currentUser }) {
                             type="button"
                             variant="secondary"
                             size="sm"
+                            className="w-full sm:w-auto"
                             disabled={!groupDraft.trim() || creatingGroupForClass === classItem.id}
                             onClick={() => handleCreateGroup(classItem.id)}
                           >
@@ -1667,7 +1669,7 @@ function ClassManagementPanel({ currentUser }) {
                           ) : (
                             classGroups.map((groupItem) => (
                               <div key={groupItem.id} className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/75 p-3">
-                                <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-start sm:items-center justify-between gap-2">
                                   {editingGroupNameId === groupItem.id ? (
                                     <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                       <Input
@@ -1696,25 +1698,27 @@ function ClassManagementPanel({ currentUser }) {
                                       </Button>
                                     </div>
                                   ) : (
-                                    <div className="flex items-center gap-2 min-w-0">
+                                    <div className="min-w-0 flex-1">
                                       <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{groupItem.name}</p>
-                                      <Button
-                                        type="button"
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() => handleStartEditGroupName(groupItem)}
-                                      >
-                                        Rename
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="secondary"
-                                        size="sm"
-                                        disabled={deletingGroupId === groupItem.id}
-                                        onClick={() => handleDeleteGroup({ classId: classItem.id, groupItem })}
-                                      >
-                                        {deletingGroupId === groupItem.id ? 'Deleting...' : 'Delete'}
-                                      </Button>
+                                      <div className="mt-2 sm:mt-0 flex flex-wrap gap-1.5">
+                                        <Button
+                                          type="button"
+                                          variant="secondary"
+                                          size="sm"
+                                          onClick={() => handleStartEditGroupName(groupItem)}
+                                        >
+                                          Rename
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="secondary"
+                                          size="sm"
+                                          disabled={deletingGroupId === groupItem.id}
+                                          onClick={() => handleDeleteGroup({ classId: classItem.id, groupItem })}
+                                        >
+                                          {deletingGroupId === groupItem.id ? 'Deleting...' : 'Delete'}
+                                        </Button>
+                                      </div>
                                     </div>
                                   )}
                                   <Badge tone="brand" className="shrink-0">{(groupItem.members || []).length} students</Badge>
@@ -1732,10 +1736,12 @@ function ClassManagementPanel({ currentUser }) {
                                           type="button"
                                           size="sm"
                                           variant={inGroup ? 'primary' : 'secondary'}
-                                          className="text-[0.74rem] px-2.5 py-1"
+                                          className="text-[0.74rem] px-2.5 py-1 max-w-full"
+                                          title={email}
                                           onClick={() => handleToggleStudentInGroup({ classId: classItem.id, groupItem, studentEmail: email })}
                                         >
-                                          {inGroup ? `In Group: ${email}` : `Add: ${email}`}
+                                          <span className="sm:hidden">{inGroup ? 'In group' : 'Add'}</span>
+                                          <span className="hidden sm:inline">{inGroup ? `In Group: ${email}` : `Add: ${email}`}</span>
                                         </Button>
                                       )
                                     })
@@ -1750,19 +1756,20 @@ function ClassManagementPanel({ currentUser }) {
 
                     {classDetailTab === 'modules' && (
                       <>
-                        <div className="mt-4 flex items-center justify-between">
+                        <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                           <p className="text-sm font-semibold text-[var(--color-text-primary)]">Modules</p>
                           <Button
                             type="button"
                             variant="secondary"
                             size="sm"
+                            className="w-full sm:w-auto"
                             onClick={() => updateModuleDraft(classItem.id, { open: !draft.open })}
                           >
                             {draft.open ? 'Close' : '+ New Module'}
                           </Button>
                         </div>
 
-                        <div className="mt-2 grid grid-cols-1 md:grid-cols-[1fr_180px] gap-2">
+                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-2">
                           <Input
                             value={moduleSearchTerm}
                             onChange={(e) => setModuleSearchTerm(e.target.value)}
@@ -1796,7 +1803,7 @@ function ClassManagementPanel({ currentUser }) {
                                 type="button"
                                 variant="primary"
                                 size="sm"
-                                className="w-fit"
+                                className="w-full sm:w-fit"
                                 disabled={!draft.name.trim() || creatingModuleForClass === classItem.id}
                                 onClick={() => handleCreateModuleForClass(classItem.id)}
                               >
@@ -1831,22 +1838,26 @@ function ClassManagementPanel({ currentUser }) {
 
                               return (
                                 <div key={moduleItem.id} className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 p-3">
-                                  <div
-                                    className="cursor-pointer"
-                                    onClick={async () => {
-                                      const next = !openDocumentsByModule[moduleItem.id]
-                                      setOpenDocumentsByModule((prev) => ({ ...prev, [moduleItem.id]: next }))
-                                      if (next) await fetchDocumentsForModule(moduleItem.id)
-                                    }}
-                                  >
-                                  <div className="flex items-start justify-between gap-3">
+                                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                                     <div className="flex items-start gap-2 min-w-0">
-                                    <span className="text-lg leading-none text-[var(--color-text-muted)] select-none mt-0.5" aria-hidden="true">
-                                      {openDocumentsByModule[moduleItem.id] ? '−' : '+'}
-                                    </span>
-                                    <div className="min-w-0">
+                                      <button
+                                        type="button"
+                                        className="mt-0.5 inline-flex items-center justify-center w-7 h-7 rounded-md border border-[var(--color-border-card-subtle)] bg-[var(--color-bg-muted)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+                                        aria-label={openDocumentsByModule[moduleItem.id] ? 'Collapse module documents' : 'Expand module documents'}
+                                        onClick={async () => {
+                                          const next = !openDocumentsByModule[moduleItem.id]
+                                          setOpenDocumentsByModule((prev) => ({ ...prev, [moduleItem.id]: next }))
+                                          if (next) await fetchDocumentsForModule(moduleItem.id)
+                                        }}
+                                      >
+                                        <span className="text-lg leading-none select-none" aria-hidden="true">
+                                          {openDocumentsByModule[moduleItem.id] ? '−' : '+'}
+                                        </span>
+                                      </button>
+
+                                      <div className="min-w-0">
                                       {editingModuleNameId === moduleItem.id ? (
-                                        <div className="flex items-center gap-1.5 mb-1" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex flex-wrap items-center gap-1.5 mb-1 md:flex-nowrap">
                                           <Input
                                             value={editingModuleNameValue}
                                             onChange={(e) => setEditingModuleNameValue(e.target.value)}
@@ -1914,7 +1925,7 @@ function ClassManagementPanel({ currentUser }) {
                                       )}
                                     </div>
                                     </div>
-                                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex flex-wrap items-center justify-start sm:justify-end gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                                       <Badge tone={moduleItem.moduleStatus === 'archived' ? 'warning' : 'neutral'}>
                                         {moduleItem.moduleStatus === 'archived' ? 'Archived' : 'Module'}
                                       </Badge>
@@ -1967,57 +1978,56 @@ function ClassManagementPanel({ currentUser }) {
                                     <Badge tone="neutral">Viewable: {seenCount}</Badge>
                                     <Badge tone="brand">Unlocked: {unlockedCount}</Badge>
                                   </div>
-                                  </div>
 
                                   <div
                                     className="grid transition-[grid-template-rows] duration-300 ease-in-out"
                                     style={{ gridTemplateRows: openDocumentsByModule[moduleItem.id] ? '1fr' : '0fr' }}
                                   >
-                                  <div className="min-h-0 overflow-hidden">
-                                  <div className="mt-3 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/80">
-                                    <DocumentPanel
-                                      moduleId={moduleItem.id}
-                                      documents={documentsByModule[moduleItem.id] || []}
-                                      onDocumentsChanged={() => fetchDocumentsForModule(moduleItem.id)}
-                                    />
-                                  </div>
-
-                                  <div className="mt-2.5">
-                                    <p className="tp-eyebrow mb-1.5">
-                                      Assign Groups
-                                    </p>
-                                    {classGroups.length === 0 ? (
-                                      <span className="text-xs text-[var(--color-text-muted)]">Create groups first in the Groups tab.</span>
-                                    ) : (
-                                      <div className="space-y-1.5">
-                                        {classGroups.map((groupItem) => (
-                                          <div
-                                            key={`${moduleItem.id}-${groupItem.id}`}
-                                            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 px-2.5 py-1.5"
-                                          >
-                                            <span className="text-sm text-[var(--color-text-secondary)] truncate">
-                                              {groupItem.name}
-                                              <span className="text-[var(--color-text-muted)]"> · Number of Students: {(groupItem.members || []).length}</span>
-                                            </span>
-                                            <div className="flex items-center gap-1.5 shrink-0">
-                                              <AccessToggle
-                                                kind="see"
-                                                active={seeGroupIds.includes(groupItem.id) || accessGroupIds.includes(groupItem.id)}
-                                                title="Group can see this module"
-                                                onClick={() => handleToggleGroupSee({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
-                                              />
-                                              <AccessToggle
-                                                kind="access"
-                                                active={accessGroupIds.includes(groupItem.id)}
-                                                title="Group can open this module"
-                                                onClick={() => handleToggleGroupAccess({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
-                                              />
-                                            </div>
-                                          </div>
-                                        ))}
+                                    <div className="min-h-0 overflow-hidden">
+                                      <div className="mt-3 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/80">
+                                        <DocumentPanel
+                                          moduleId={moduleItem.id}
+                                          documents={documentsByModule[moduleItem.id] || []}
+                                          onDocumentsChanged={() => fetchDocumentsForModule(moduleItem.id)}
+                                        />
                                       </div>
-                                    )}
-                                  </div>
+
+                                      <div className="mt-2.5">
+                                        <p className="tp-eyebrow mb-1.5">
+                                          Assign Groups
+                                        </p>
+                                        {classGroups.length === 0 ? (
+                                          <span className="text-xs text-[var(--color-text-muted)]">Create groups first in the Groups tab.</span>
+                                        ) : (
+                                          <div className="space-y-1.5">
+                                            {classGroups.map((groupItem) => (
+                                              <div
+                                                key={`${moduleItem.id}-${groupItem.id}`}
+                                                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 px-2.5 py-1.5"
+                                              >
+                                                <span className="text-sm text-[var(--color-text-secondary)] min-w-0">
+                                                  <span className="truncate block">{groupItem.name}</span>
+                                                  <span className="text-[var(--color-text-muted)] block sm:inline"> · Students: {(groupItem.members || []).length}</span>
+                                                </span>
+                                                <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                                                  <AccessToggle
+                                                    kind="see"
+                                                    active={seeGroupIds.includes(groupItem.id) || accessGroupIds.includes(groupItem.id)}
+                                                    title="Group can see this module"
+                                                    onClick={() => handleToggleGroupSee({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
+                                                  />
+                                                  <AccessToggle
+                                                    kind="access"
+                                                    active={accessGroupIds.includes(groupItem.id)}
+                                                    title="Group can open this module"
+                                                    onClick={() => handleToggleGroupAccess({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
+                                                  />
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
 
                                   {classStudents.length > 0 && (
                                     <div className="mt-3 rounded-lg border border-[var(--color-border-card-subtle)] bg-[var(--color-bg-muted)] p-2.5">
