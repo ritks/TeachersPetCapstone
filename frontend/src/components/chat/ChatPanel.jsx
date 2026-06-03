@@ -6,7 +6,7 @@ import { CHAT_COPY } from '../../content/strings'
 import { getSpeechSynthesis, stripForSpeech, pickBestVoice, loadVoices } from '../../lib/speech'
 import { apiUrl } from '../../lib/api'
 import { apiFetch } from '../../lib/apiAuth'
-import { Button, Card, Input } from '../ui/primitives'
+import { Button, Card } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -101,6 +101,22 @@ function InputBar({ value, onChange, onSubmit, disabled }) {
   const [speechSupported] = useState(() => !!getSpeechRecognitionCtor())
   const recognitionRef = useRef(null)
   const prefixRef = useRef('')
+  const textareaRef = useRef(null)
+
+  // Auto-grow the textarea to fit its content (capped, then scrolls).
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+  }, [value])
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      onSubmit(e)
+    }
+  }
 
   useEffect(() => {
     const SpeechRecognition = getSpeechRecognitionCtor()
@@ -165,14 +181,16 @@ function InputBar({ value, onChange, onSubmit, disabled }) {
 
   return (
     <div className="px-4 pb-4 pt-2">
-      <form onSubmit={onSubmit} className="max-w-3xl mx-auto flex gap-2 items-center rounded-[1.1rem] border border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-md px-3 py-2 shadow-[var(--shadow-md)]">
-        <Input
-          type="text"
+      <form onSubmit={onSubmit} className="max-w-3xl mx-auto flex gap-2 items-end rounded-[1.1rem] border border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-md px-3 py-2 shadow-[var(--shadow-md)]">
+        <textarea
+          ref={textareaRef}
+          rows={1}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder={CHAT_COPY.inputPlaceholder}
           disabled={disabled}
-          className="flex-1 rounded-[var(--radius-pill)] px-5 py-2.5 disabled:opacity-50 bg-white/80 border-[var(--color-border-card)]"
+          className="flex-1 resize-none max-h-40 overflow-y-auto rounded-[1.25rem] px-5 py-2.5 text-sm leading-relaxed bg-white/80 border border-[var(--color-border-card)] text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-100)] focus:border-[var(--color-brand-600)] disabled:opacity-50"
         />
         {speechSupported && (
           <button
@@ -219,7 +237,7 @@ function InputBar({ value, onChange, onSubmit, disabled }) {
 function TypingIndicator() {
   return (
     <div className="flex items-end gap-2">
-      <LogoMark containerClassName="w-8 h-8 rounded-full bg-[var(--color-primary-700)] border border-[rgba(255,255,255,0.4)] flex-shrink-0 shadow-sm p-0.5" imgClassName="rounded-full" />
+      <LogoMark containerClassName="tp-logo-plate w-8 h-8 rounded-full bg-[var(--color-brand-50)] border border-[var(--color-brand-100)] flex-shrink-0 shadow-sm p-0.5" imgClassName="rounded-full" />
       <div className="bg-[var(--bg-frosted)] border border-[var(--color-border-card-subtle)] rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
         <div className="flex gap-1.5 items-center h-3">
           <span className="w-2 h-2 bg-[var(--color-brand-500)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -352,7 +370,7 @@ export function Bubble({ message, onCitationClick }) {
   return (
     <div className={`flex items-end gap-2 ${isStudent ? 'flex-row-reverse' : ''}`}>
       {!isStudent && (
-        <LogoMark containerClassName="w-8 h-8 rounded-full bg-[var(--color-primary-700)] border border-[rgba(255,255,255,0.38)] flex-shrink-0 shadow-sm p-0.5" imgClassName="rounded-full" />
+        <LogoMark containerClassName="tp-logo-plate w-8 h-8 rounded-full bg-[var(--color-brand-50)] border border-[var(--color-brand-100)] flex-shrink-0 shadow-sm p-0.5" imgClassName="rounded-full" />
       )}
 
       <div
@@ -366,18 +384,15 @@ export function Bubble({ message, onCitationClick }) {
         ].join(' ')}
       >
         {isStudent ? (
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">
+          <p className="leading-relaxed whitespace-pre-wrap">
             {message.content}
           </p>
         ) : (
-          <>
+          <div className={message.isStreaming ? 'tp-streaming' : undefined}>
             <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
               {message.content}
             </ReactMarkdown>
-            {message.isStreaming && (
-              <span className="inline-block ml-0.5 h-4 w-1 translate-y-0.5 rounded-full bg-[var(--color-brand-500)] animate-pulse" aria-hidden />
-            )}
-          </>
+          </div>
         )}
         {!isStudent && message.citations && message.citations.length > 0 && (
           <CitationCards citations={message.citations} onCitationClick={onCitationClick} />
@@ -624,11 +639,11 @@ export default function ChatPanel({ selectedModuleId, userType, studentData, cur
 
   return (
     <>
-      <section ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-6 tp-card-surface-soft">
+      <section ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-6 tp-card-surface-soft">
         {isStudentEmptyState ? (
           <StudentEmptyState greeting={greeting} onQuickAction={handleQuickAction} />
         ) : (
-          <div className="max-w-3xl mx-auto flex flex-col gap-4">
+          <div className="max-w-3xl mx-auto flex flex-col gap-4 tp-chat-scale">
             {messages.map((msg, i) => (
               <Bubble key={i} message={msg} onCitationClick={(c) => onCitationsChange?.([c])} />
             ))}

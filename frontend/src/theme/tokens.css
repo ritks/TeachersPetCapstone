@@ -187,6 +187,13 @@
   border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
+/* Keep the logo plate light in dark mode so the navy PNG logo stays visible
+   (matches its light-mode brand-50 background). */
+[data-theme="dark"] .tp-logo-plate {
+  background-color: #eef2ff;
+  border-color: #e0e7ff;
+}
+
 *,
 *::before,
 *::after {
@@ -276,6 +283,29 @@ body {
   background: var(--color-brand-50);
   border-color: var(--color-brand-500);
   color: var(--color-text-primary);
+}
+
+/* Chat text size (Settings → Text size); set via data-text-size on <html>. */
+:root { --tp-chat-font: 0.95rem; }
+[data-text-size="sm"] { --tp-chat-font: 0.85rem; }
+[data-text-size="lg"] { --tp-chat-font: 1.1rem; }
+.tp-chat-scale { font-size: var(--tp-chat-font); }
+
+/* Streaming cursor — rendered inline at the end of the last paragraph so it
+   sits where the text is emerging instead of dropping to a new line. */
+.tp-streaming p:last-child::after {
+  content: '';
+  display: inline-block;
+  width: 0.25rem;
+  height: 1rem;
+  margin-left: 0.15rem;
+  vertical-align: text-bottom;
+  border-radius: 9999px;
+  background: var(--color-brand-500);
+  animation: tp-cursor-blink 1s ease-in-out infinite;
+}
+@keyframes tp-cursor-blink {
+  50% { opacity: 0.4; }
 }
 /* Card surface — white + gradient in light, flat dark surface in dark */
 .tp-card-surface {

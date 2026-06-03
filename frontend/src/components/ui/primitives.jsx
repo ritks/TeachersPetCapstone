@@ -50,7 +50,7 @@ export function Badge({ children, tone = 'neutral', className = '' }) {
     danger: 'bg-[var(--color-danger-50)] text-[var(--color-danger-600)] border-transparent',
   }
   return (
-    <span className={cx('inline-flex items-center border px-2 py-0.5 rounded-[var(--radius-pill)] text-xs font-medium', tones[tone], className)}>
+    <span className={cx('inline-flex items-center whitespace-nowrap border px-2 py-0.5 rounded-[var(--radius-pill)] text-xs font-medium', tones[tone], className)}>
       {children}
     </span>
   )
