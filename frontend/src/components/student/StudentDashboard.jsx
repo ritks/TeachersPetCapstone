@@ -4,7 +4,7 @@ import { Badge, Button, Card, Panel } from '../ui/primitives'
 import LogoMark from '../common/LogoMark'
 import { useStudent } from '../../contexts/StudentContext'
 import { apiFetch } from '../../lib/apiAuth'
-import ThemeToggleButton from '../common/ThemeToggleButton'
+import SettingsMenu from '../common/SettingsMenu'
 
 export default function StudentDashboard({ currentUser, onLogout }) {
   const navigate = useNavigate()
@@ -55,18 +55,17 @@ export default function StudentDashboard({ currentUser, onLogout }) {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_84%_14%,rgba(65,90,119,0.34),rgba(65,90,119,0)_54%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(122deg,rgba(27,38,59,0.14),rgba(27,38,59,0.02)_42%,rgba(65,90,119,0.2)_100%)]" />
 
-      <header className="relative z-10 border-b border-[var(--color-border-card-subtle)] tp-header-surface backdrop-blur-md">
+      <header className="relative z-30 border-b border-[var(--color-border-card-subtle)] tp-header-surface backdrop-blur-md">
         <div className="max-w-[1240px] mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <LogoMark containerClassName="w-10 h-10 rounded-xl bg-[var(--color-brand-50)] border border-[var(--color-brand-100)] p-1" />
+            <LogoMark containerClassName="tp-logo-plate w-10 h-10 rounded-xl bg-[var(--color-brand-50)] border border-[var(--color-brand-100)] p-1" />
             <div>
               <p className="text-[0.95rem] font-semibold text-[var(--color-text-primary)]">Student Dashboard</p>
               <p className="text-xs text-[var(--color-text-muted)]">{currentUser?.displayName || currentUser?.email}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <ThemeToggleButton />
-            <Button onClick={onLogout} variant="secondary" size="md">Logout</Button>
+            <SettingsMenu onLogout={onLogout} />
           </div>
         </div>
       </header>

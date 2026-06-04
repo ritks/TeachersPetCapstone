@@ -5,7 +5,7 @@ import LogoMark from '../common/LogoMark'
 import { apiUrl } from '../../lib/api'
 import { apiFetch } from '../../lib/apiAuth'
 import DocumentPanel from './DocumentPanel'
-import ThemeToggleButton from '../common/ThemeToggleButton'
+import SettingsMenu from '../common/SettingsMenu'
 
 // Eye / lock icon toggle reused for both group-level and per-student SEE / ACCESS controls.
 function AccessToggle({ kind, active, onClick, title }) {
@@ -1788,26 +1788,22 @@ function ClassManagementPanel({ currentUser }) {
 
                               return (
                                 <div key={moduleItem.id} className="rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 p-3">
-                                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                  <div
+                                    className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 cursor-pointer"
+                                    onClick={async () => {
+                                      const next = !openDocumentsByModule[moduleItem.id]
+                                      setOpenDocumentsByModule((prev) => ({ ...prev, [moduleItem.id]: next }))
+                                      if (next) await fetchDocumentsForModule(moduleItem.id)
+                                    }}
+                                  >
                                     <div className="flex items-start gap-2 min-w-0">
-                                      <button
-                                        type="button"
-                                        className="mt-0.5 inline-flex items-center justify-center w-7 h-7 rounded-md border border-[var(--color-border-card-subtle)] bg-[var(--color-bg-muted)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
-                                        aria-label={openDocumentsByModule[moduleItem.id] ? 'Collapse module documents' : 'Expand module documents'}
-                                        onClick={async () => {
-                                          const next = !openDocumentsByModule[moduleItem.id]
-                                          setOpenDocumentsByModule((prev) => ({ ...prev, [moduleItem.id]: next }))
-                                          if (next) await fetchDocumentsForModule(moduleItem.id)
-                                        }}
-                                      >
-                                        <span className="text-lg leading-none select-none" aria-hidden="true">
-                                          {openDocumentsByModule[moduleItem.id] ? '−' : '+'}
-                                        </span>
-                                      </button>
+                                      <span className="text-lg leading-none text-[var(--color-text-muted)] select-none mt-0.5" aria-hidden="true">
+                                        {openDocumentsByModule[moduleItem.id] ? '−' : '+'}
+                                      </span>
 
                                       <div className="min-w-0">
                                       {editingModuleNameId === moduleItem.id ? (
-                                        <div className="flex flex-wrap items-center gap-1.5 mb-1 md:flex-nowrap">
+                                        <div className="flex flex-wrap items-center gap-1.5 mb-1 md:flex-nowrap" onClick={(e) => e.stopPropagation()}>
                                           <Input
                                             value={editingModuleNameValue}
                                             onChange={(e) => setEditingModuleNameValue(e.target.value)}
@@ -1876,9 +1872,9 @@ function ClassManagementPanel({ currentUser }) {
                                     </div>
                                     </div>
                                     <div className="flex flex-wrap items-center justify-start sm:justify-end gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                      <Badge tone={moduleItem.moduleStatus === 'archived' ? 'warning' : 'neutral'}>
-                                        {moduleItem.moduleStatus === 'archived' ? 'Archived' : 'Module'}
-                                      </Badge>
+                                      {moduleItem.moduleStatus === 'archived' && (
+                                        <Badge tone="warning">Archived</Badge>
+                                      )}
                                       {editingModuleDescriptionId !== moduleItem.id && editingModuleNameId !== moduleItem.id && (
                                         <Button
                                           type="button"
@@ -1955,23 +1951,25 @@ function ClassManagementPanel({ currentUser }) {
                                                 key={`${moduleItem.id}-${groupItem.id}`}
                                                 className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg border border-[var(--color-border-card-subtle)] bg-white/70 px-2.5 py-1.5"
                                               >
-                                                <span className="text-sm text-[var(--color-text-secondary)] min-w-0">
-                                                  <span className="truncate block">{groupItem.name}</span>
-                                                  <span className="text-[var(--color-text-muted)] block sm:inline"> · Students: {(groupItem.members || []).length}</span>
+                                                <span className="text-sm text-[var(--color-text-secondary)] min-w-0 truncate">
+                                                  {groupItem.name}
                                                 </span>
-                                                <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-                                                  <AccessToggle
-                                                    kind="see"
-                                                    active={seeGroupIds.includes(groupItem.id) || accessGroupIds.includes(groupItem.id)}
-                                                    title="Group can see this module"
-                                                    onClick={() => handleToggleGroupSee({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
-                                                  />
-                                                  <AccessToggle
-                                                    kind="access"
-                                                    active={accessGroupIds.includes(groupItem.id)}
-                                                    title="Group can open this module"
-                                                    onClick={() => handleToggleGroupAccess({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
-                                                  />
+                                                <div className="flex items-center justify-between gap-2 sm:justify-end shrink-0">
+                                                  <span className="text-sm text-[var(--color-text-muted)] whitespace-nowrap">Students: {(groupItem.members || []).length}</span>
+                                                  <div className="flex items-center gap-1.5">
+                                                    <AccessToggle
+                                                      kind="see"
+                                                      active={seeGroupIds.includes(groupItem.id) || accessGroupIds.includes(groupItem.id)}
+                                                      title="Group can see this module"
+                                                      onClick={() => handleToggleGroupSee({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
+                                                    />
+                                                    <AccessToggle
+                                                      kind="access"
+                                                      active={accessGroupIds.includes(groupItem.id)}
+                                                      title="Group can open this module"
+                                                      onClick={() => handleToggleGroupAccess({ classId: classItem.id, moduleItem, groupId: groupItem.id })}
+                                                    />
+                                                  </div>
                                                 </div>
                                               </div>
                                             ))}
@@ -2123,10 +2121,10 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
       <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_84%_14%,rgba(65,90,119,0.34),rgba(65,90,119,0)_54%)]" />
       <div className="fixed inset-0 pointer-events-none bg-[linear-gradient(122deg,rgba(27,38,59,0.14),rgba(27,38,59,0.02)_42%,rgba(65,90,119,0.2)_100%)]" />
 
-      <header className="relative z-10 border-b border-[var(--color-border-card-subtle)] tp-header-surface backdrop-blur-md">
+      <header className="relative z-30 border-b border-[var(--color-border-card-subtle)] tp-header-surface backdrop-blur-md">
         <div className="max-w-[1240px] mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <LogoMark containerClassName="w-10 h-10 rounded-xl bg-[var(--color-brand-50)] border border-[var(--color-brand-100)] p-1" />
+            <LogoMark containerClassName="tp-logo-plate w-10 h-10 rounded-xl bg-[var(--color-brand-50)] border border-[var(--color-brand-100)] p-1" />
             <div>
               <p className="text-[0.95rem] font-semibold text-[var(--color-text-primary)]">Teacher Dashboard</p>
               <p className="text-xs text-[var(--color-text-muted)]">
@@ -2135,10 +2133,7 @@ export default function TeacherDashboard({ onLogout, currentUser }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <ThemeToggleButton />
-            <Button onClick={onLogout} variant="secondary" size="md">
-              Logout
-            </Button>
+            <SettingsMenu onLogout={onLogout} />
           </div>
         </div>
       </header>

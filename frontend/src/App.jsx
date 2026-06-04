@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
-import { APP_COPY } from './content/strings'
 import { useAuth } from './contexts/AuthContext'
 import { useStudent } from './contexts/StudentContext'
 import { ThemeProvider } from './contexts/ThemeContext'
@@ -13,7 +12,7 @@ import PdfViewerPanel from './components/student/PdfViewerPanel'
 import TeacherDashboard from './components/teacher/TeacherDashboard'
 import { Button } from './components/ui/primitives'
 import { apiUrl } from './lib/api'
-import ThemeToggleButton from './components/common/ThemeToggleButton'
+import SettingsMenu from './components/common/SettingsMenu'
 
 function makeNewSession() {
   return {
@@ -385,9 +384,18 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
     if (hasPdf && !mobileSessionsOpen) setPdfViewerOpen(true)
   }
 
+  // Lock page scroll while this full-height module view is mounted so only the
+  // chat messages scroll. Dashboards scroll the page, so this is scoped here and
+  // restored on unmount.
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+
   return (
     <div
-      className={`flex flex-col md:flex-row h-screen tp-card-surface-soft ${mobileSessionsOpen ? 'overflow-hidden' : 'overflow-y-auto'} md:overflow-hidden`}
+      className="flex flex-col md:flex-row h-[100dvh] tp-card-surface-soft overflow-hidden"
     >
       <div className="hidden md:block">
         <StudentSidebar
@@ -402,9 +410,9 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
           teacherName={teacherName}
         />
       </div>
-      <div className="flex flex-col flex-1 min-w-0 bg-transparent">
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 bg-transparent">
         <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-sm flex-shrink-0">
-          <div>
+          <div className="flex items-center gap-2">
             <Button
               onClick={() => { setMobileSessionsOpen(true); setPdfViewerOpen(false) }}
               variant="ghost"
@@ -437,15 +445,7 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
             >
               Textbook
             </Button>
-            <ThemeToggleButton />
-            <Button
-              onClick={onLogout}
-              variant="ghost"
-              size="md"
-              className="text-gray-400 hover:text-red-500 hover:bg-red-50"
-            >
-              {APP_COPY.leave}
-            </Button>
+            <SettingsMenu onLogout={onLogout} />
           </div>
         </div>
         <div className="flex flex-1 min-h-0 flex-col md:flex-row">
