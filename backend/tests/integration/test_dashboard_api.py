@@ -49,7 +49,11 @@ def _seed_class_with_module(db, *, can_see, is_unlocked, by_email=False, student
             student_uid=STUDENT_UID, can_see=can_see, is_unlocked=is_unlocked,
         )
 
-    db.add_all([cls, module, link, enrollment, access])
+    # Insert parents first (flush) so FK-dependent rows satisfy constraints on
+    # Postgres, which — unlike SQLite — enforces foreign keys.
+    db.add_all([cls, module])
+    db.flush()
+    db.add_all([link, enrollment, access])
     db.commit()
 
 
@@ -107,8 +111,10 @@ class TestStudentDashboard:
         cls = TeacherClass(
             id="class-1", name="Old Class", teacher_uid="teacher-1", status="archived"
         )
+        db_session.add(cls)
+        db_session.flush()  # parent must exist before the FK-bearing enrollment
         enrollment = ClassStudent(class_id="class-1", teacher_uid="teacher-1", student_uid=STUDENT_UID)
-        db_session.add_all([cls, enrollment])
+        db_session.add(enrollment)
         db_session.commit()
         client, _ = as_student
 
