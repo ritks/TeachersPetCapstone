@@ -85,41 +85,62 @@ def _setup_test_database(tmp_path):
     # Create subdirectories
     test_data_dir = tmp_path / "data"
     test_data_dir.mkdir()
-    
+
     # ──────────────────────────────────────────────────────────────────────────
-    # Patch database to use per-test temp directory
+    # Patch database engine for this test.
+    #
+    # Use the dedicated TEST_DATABASE_URL when set (the disposable Postgres
+    # service in CI) so tests exercise the same engine as production. Otherwise
+    # fall back to an isolated temp SQLite database for fast local runs.
+    #
+    # IMPORTANT: tests deliberately ignore DATABASE_URL. A developer's local .env
+    # points DATABASE_URL at the live production database, and these fixtures run
+    # drop_all()/create_all(); keying off a separate TEST_DATABASE_URL guarantees
+    # the test suite can never reset a real database.
     # ──────────────────────────────────────────────────────────────────────────
-    
+
     import database.db as db_mod
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    
+
+    database_url = os.getenv("TEST_DATABASE_URL")
+    if database_url:
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+        engine_kwargs = {}
+    else:
+        database_url = f"sqlite:///{test_data_dir / 'test.db'}"
+        engine_kwargs = {"connect_args": {"check_same_thread": False}}
+
     db_mod.DATABASE_DIR = str(test_data_dir)
-    db_mod.DATABASE_URL = f"sqlite:///{test_data_dir / 'test.db'}"
-    db_mod.engine = create_engine(
-        db_mod.DATABASE_URL, connect_args={"check_same_thread": False}
-    )
+    db_mod.DATABASE_URL = database_url
+    db_mod.engine = create_engine(database_url, **engine_kwargs)
     db_mod.SessionLocal = sessionmaker(
         autocommit=False, autoflush=False, bind=db_mod.engine
     )
-    
+
     # ──────────────────────────────────────────────────────────────────────────
     # Patch ChromaDB to use per-test temp directory
     # ──────────────────────────────────────────────────────────────────────────
-    
+
     import rag.vector_store as vs_mod
     vs_mod.CHROMA_DIR = str(test_data_dir / "chroma")
-    
+
     # ──────────────────────────────────────────────────────────────────────────
-    # Initialize database tables for this test
+    # Reset tables for this test. Drop first so a shared database (Postgres)
+    # starts each test clean, mirroring the fresh temp SQLite file used locally.
     # ──────────────────────────────────────────────────────────────────────────
-    
-    from database.db import init_db
+
+    from database import models, app_models  # noqa: F401 — register tables on Base
+    from database.db import Base, init_db
+    Base.metadata.drop_all(bind=db_mod.engine)
     init_db()
-    
+
     yield  # Test runs here
-    
-    # Cleanup happens automatically via tmp_path
+
+    # SQLite cleans up via tmp_path; drop tables for a shared engine too.
+    Base.metadata.drop_all(bind=db_mod.engine)
+    db_mod.engine.dispose()
 
 
 # ──────────────────────────────────────────────────────────────────────────

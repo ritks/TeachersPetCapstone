@@ -40,20 +40,14 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-asyncio pytest-cov
     
-    - name: Lint with pylint (if available)
-      continue-on-error: true
-      run: |
-        if command -v pylint &> /dev/null; then
-          pylint **/*.py --exit-zero || true
-        fi
-    
     - name: Run tests with pytest
       run: |
-        python -m pytest tests/ -v --tb=short --cov=. --cov-report=xml --cov-report=html
+        python -m pytest tests/ -v --tb=short --cov=. --cov-report=xml --cov-report=html --cov-fail-under=80
       env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/teacherspet_test
+        # Tests read TEST_DATABASE_URL (never DATABASE_URL) so they only ever
+        # touch this disposable CI Postgres, never a real database.
+        TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/teacherspet_test
         GEMINI_API_KEY: mock-gemini-api-key-for-ci-testing
-        GITHUB_TOKEN: mock-github-token-for-ci-testing
     
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v3

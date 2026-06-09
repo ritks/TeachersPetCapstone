@@ -21,11 +21,10 @@ jobs:
         cache: 'npm'
     
     - name: Install dependencies
-      run: npm install --legacy-peer-deps
+      run: npm ci --legacy-peer-deps
     
     - name: Run linter
-      continue-on-error: true
-      run: npm run lint || true
+      run: npm run lint
 
     - name: Build verification
       run: npm run build
@@ -66,21 +65,23 @@ jobs:
         cache: 'npm'
     
     - name: Install dependencies
-      run: npm install --legacy-peer-deps
+      run: npm ci --legacy-peer-deps
     
     - name: Install Playwright browsers
       run: npx playwright install --with-deps
     
     - name: Run E2E tests
-      run: npm run test:e2e -- --timeout=30000
+      run: npm run test:e2e -- --timeout=120000
       env:
         CI: true
-        VITE_FIREBASE_API_KEY: mock-api-key-for-ci
-        VITE_FIREBASE_AUTH_DOMAIN: mock-project.firebaseapp.com
-        VITE_FIREBASE_PROJECT_ID: mock-project
-        VITE_FIREBASE_STORAGE_BUCKET: mock-project.appspot.com
-        VITE_FIREBASE_MESSAGING_SENDER_ID: '123456789'
-        VITE_FIREBASE_APP_ID: '1:123456789:web:abc123def456'
+        # Run against the deployed production app — no local build/serve and no
+        # Firebase web config needed (the deployed app already has it baked in).
+        E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+        # Test-account credentials (the specs self-skip if these are absent, e.g. on forks).
+        E2E_STUDENT_EMAIL: ${{ secrets.E2E_STUDENT_EMAIL }}
+        E2E_STUDENT_PASSWORD: ${{ secrets.E2E_STUDENT_PASSWORD }}
+        E2E_TEACHER_EMAIL: ${{ secrets.E2E_TEACHER_EMAIL }}
+        E2E_TEACHER_PASSWORD: ${{ secrets.E2E_TEACHER_PASSWORD }}
     
     - name: Upload Playwright report
       if: always()

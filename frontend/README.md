@@ -15,22 +15,29 @@ Requires the backend running on http://localhost:8000 and a `frontend/.env` file
 
 ```
 src/
-├── firebase.js                  # Firebase app, auth, Firestore exports
-├── main.jsx                     # Entry point — BrowserRouter, AuthProvider, StudentProvider
-├── App.jsx                      # URL-based routing (/teacher, /student, /student/module/:id)
+├── firebase.js                  # Firebase app + auth (authentication only — no Firestore)
+├── main.jsx                     # Entry — BrowserRouter, AuthProvider, StudentProvider, ThemeProvider
+├── App.jsx                      # Routing (/teacher, /student, /student/module/:id) + chat workspace
 ├── contexts/
-│   ├── AuthContext.jsx          # useAuth() hook (login, register, Google, logout)
-│   └── StudentContext.jsx       # Guest/authenticated student state + localStorage
-├── components/
-│   ├── EntryPage.jsx            # Landing page (Student / Teacher panels)
-│   ├── EntryPage.test.jsx       # EntryPage tests (collocated)
-│   ├── TeacherLoginPage.jsx     # Email+password and Google OAuth
-│   ├── StudentLoginPage.jsx     # Student email login
-│   └── student/
-│       └── StudentDashboard.jsx # Authenticated student class/module view
-└── lib/
-    └── speech.test.js           # TTS speech library tests
+│   ├── AuthContext.jsx          # useAuth() — login, register, Google, logout
+│   ├── StudentContext.jsx       # Authenticated student state + localStorage
+│   └── ThemeContext.jsx         # Light/dark theme (persisted + server-synced)
+├── lib/
+│   ├── api.js / apiAuth.js      # Backend base URL + authenticated fetch helper
+│   ├── speech.js                # Text-to-speech for tutor replies
+│   └── textSize.js              # Chat font-size preference
+└── components/
+    ├── EntryPage.jsx            # Landing page (Student / Teacher panels)
+    ├── TeacherLoginPage.jsx / StudentLoginPage.jsx
+    ├── AnalyticsDashboard.jsx   # Teacher chat-log analytics
+    ├── chat/ChatPanel.jsx       # Tutor chat UI (streaming, TTS, citations)
+    ├── teacher/                 # TeacherDashboard, DocumentPanel, TeacherSidebar
+    ├── student/                 # StudentDashboard, PdfViewerPanel, StudentSidebar
+    └── common/ + ui/            # SettingsMenu, LogoMark, primitives
 ```
+
+Tests are **colocated** (`*.test.{js,jsx}` next to source). E2E tests live in
+`e2e/` — see [e2e/README.md](e2e/README.md).
 
 ## Environment Variables
 
@@ -73,13 +80,17 @@ npm run test:coverage
 Tests use a **collocated pattern** where each component has a corresponding `.test.jsx` file in the same directory:
 
 ```
-src/components/
-├── AnalyticsDashboard.jsx
-├── AnalyticsDashboard.test.jsx     ← Tests live next to components
-├── EntryPage.jsx
-├── EntryPage.test.jsx
-├── TeacherLoginPage.jsx
-└── TeacherLoginPage.test.jsx
+src/
+├── lib/api.test.js                 ← Tests live next to source
+├── lib/apiAuth.test.js
+├── lib/speech.test.js
+├── lib/textSize.test.js
+├── contexts/AuthContext.test.jsx
+├── contexts/StudentContext.test.jsx
+├── contexts/ThemeContext.test.jsx
+├── components/EntryPage.test.jsx
+├── components/chat/ChatPanel.test.jsx
+└── components/student/StudentDashboard.test.jsx
 ```
 
 ### Key Concepts

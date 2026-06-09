@@ -45,7 +45,7 @@ The primary workflow that orchestrates all tests and checks.
 **Workflow:**
 1. status-check validates project structure
 2. backend-tests and frontend-tests run in parallel
-3. integration-check downloads artifacts and confirms success
+3. integration-check runs only if both suites succeed (enforced by `needs:`), confirming all checks passed
 
 ### 2. `backend-tests.yml`
 Comprehensive backend testing workflow for Python code.
@@ -62,15 +62,14 @@ Comprehensive backend testing workflow for Python code.
 1. Checkout code
 2. Set up Python 3.11 with cached pip dependencies
 3. Install project dependencies and pytest packages
-4. Run linter (pylint) - non-blocking (`continue-on-error: true`, only runs if pylint is installed)
-5. Run pytest with coverage reporting (XML + HTML)
-6. Upload coverage to Codecov
-7. Archive test results (.pytest_cache)
+4. Run pytest with coverage reporting (XML + HTML) and an enforced floor (`--cov-fail-under=80`)
+5. Upload coverage to Codecov
+6. Archive test results (.pytest_cache)
 
 **Environment Variables:**
-- `DATABASE_URL`: PostgreSQL connection string
+- `TEST_DATABASE_URL`: Postgres connection string for the service container. Tests
+  read **only** this (never `DATABASE_URL`), so they can never touch a real database.
 - `GEMINI_API_KEY`: Mock API key for CI testing
-- `GITHUB_TOKEN`: Mock token for CI testing
 
 **Artifacts:**
 - `pytest-results`: Test cache and results (30 days retention)
@@ -105,25 +104,26 @@ Runs Vitest tests with coverage reporting.
 - `coverage-frontend`: Coverage reports (30 days retention)
 
 #### E2E Tests
-Runs Playwright end-to-end tests in Chromium.
+Runs the Playwright dashboard specs in Chromium against the **deployed app**
+(`E2E_BASE_URL`) using a **real Firebase login** — no local build or dev server.
 
 **Steps:**
 1. Checkout code
 2. Set up Node.js 20 with cached npm dependencies
 3. Install dependencies
 4. Install Playwright browsers and system dependencies
-5. Run Playwright tests with 30-second timeout
+5. Run Playwright tests (120s timeout) against `E2E_BASE_URL`
 6. Upload Playwright HTML report
 7. Archive test results
 
-**Environment Variables (Mock Firebase):**
+**Environment Variables (from repository secrets):**
 - `CI=true`
-- `VITE_FIREBASE_API_KEY`
-- `VITE_FIREBASE_AUTH_DOMAIN`
-- `VITE_FIREBASE_PROJECT_ID`
-- `VITE_FIREBASE_STORAGE_BUCKET`
-- `VITE_FIREBASE_MESSAGING_SENDER_ID`
-- `VITE_FIREBASE_APP_ID`
+- `E2E_BASE_URL` — the deployed app URL the tests run against
+- `E2E_STUDENT_EMAIL`, `E2E_STUDENT_PASSWORD` — test student account
+- `E2E_TEACHER_EMAIL`, `E2E_TEACHER_PASSWORD` — test teacher account
+
+The specs **self-skip** if these secrets are absent (e.g. on forks), so CI stays
+green for contributors without access. See [../../frontend/e2e/README.md](../../frontend/e2e/README.md).
 
 **Artifacts:**
 - `playwright-report`: HTML test report (30 days retention)
@@ -148,28 +148,34 @@ Artifacts are retained for 30 days:
 - `playwright-report`: E2E test HTML reports
 - `e2e-test-results`: E2E test results and traces
 
+### Concurrency
+
+`ci.yml` defines a `concurrency` group (`cancel-in-progress: true`), so pushing
+new commits to a branch/PR cancels the superseded run instead of piling up.
+
 ### Environment Variables
 
 **Backend:**
-- `DATABASE_URL`: PostgreSQL connection (service container)
+- `TEST_DATABASE_URL`: Postgres connection for the service container (tests ignore `DATABASE_URL`)
 - `GEMINI_API_KEY`: Mock API key (`mock-gemini-api-key-for-ci-testing`)
-- `GITHUB_TOKEN`: Mock token (`mock-github-token-for-ci-testing`)
 
-**Frontend E2E:**
-- `CI=true`: Enables single-worker mode for Playwright
-- Mock Firebase configuration (all `VITE_FIREBASE_*` keys with test values)
+**Frontend E2E (repository secrets):**
+- `CI=true`: enables single-worker mode for Playwright
+- `E2E_BASE_URL`: the deployed app the tests run against
+- `E2E_STUDENT_*` / `E2E_TEACHER_*`: test-account credentials (specs self-skip if absent)
 
 ### Test Configuration
-- **Backend**: pytest with PostgreSQL
+- **Backend**: pytest on Postgres (SQLite locally)
 - **Frontend Unit**: Vitest
-- **Frontend E2E**: Chromium via Playwright
+- **Frontend E2E**: Chromium via Playwright, real login against the deployed app
 
 ## Security
 
 ### Permissions
-- Read-only access to repository content
-- No deployment permissions configured
-- Safe for untrusted contributors
+- Read-only access to repository content; no deployment permissions configured
+- Forks/PRs without the E2E secrets skip the E2E specs automatically
+- **Note:** the E2E specs run against the live deployed app and create/delete real
+  data (cleaned up by the teacher spec) — see the e2e README
 
 ### Dependencies
 - Using pinned GitHub Actions versions (@v4 for most actions)
@@ -219,19 +225,21 @@ To reproduce CI environment locally:
 **Backend:**
 ```bash
 cd backend
-# Set mock environment variables
 export GEMINI_API_KEY=mock-gemini-api-key-for-ci-testing
-export GITHUB_TOKEN=mock-github-token-for-ci-testing
-# Run tests with coverage
-python -m pytest tests/ -v --cov=. --cov-report=xml --cov-report=html
+# Optional: run against Postgres like CI (otherwise uses local SQLite)
+# export TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/teacherspet_test
+python -m pytest tests/ -v --cov=. --cov-report=xml --cov-report=html --cov-fail-under=80
 ```
 
-**Frontend (all checks — mirrors CI exactly):**
+**Frontend (unit/build — mirrors CI):**
 ```bash
 cd frontend
-npm install --legacy-peer-deps
-npm run pr-check   # lint → build → unit tests → e2e tests
+npm ci --legacy-peer-deps
+npm run lint && npm run build && npm test -- --run --coverage
 ```
+
+> The E2E specs need test-account credentials and run against the deployed app —
+> see [../../frontend/e2e/README.md](../../frontend/e2e/README.md) to run them locally.
 
 Or run steps individually:
 ```bash
@@ -315,20 +323,21 @@ Download artifacts from the Actions tab:
 - Check for python-multipart in backend requirements
 
 ### Timeout issues
-- Default E2E timeout is 30 seconds (configured in workflow)
-- Increase timeout if needed: `npm run test:e2e -- --timeout=60000`
+- E2E runs with a 120-second per-test timeout (live login + backend can be slow)
+- Adjust if needed: `npm run test:e2e -- --timeout=180000`
 - Check for hanging processes or network issues
 - Review test logs for slow operations
 
 ### E2E tests failing
-- Check mock environment variables are set correctly
+- Confirm the `E2E_*` repository secrets exist (the specs skip without them)
+- Verify the deployed app at `E2E_BASE_URL` is up and the test accounts are valid
 - Verify Playwright browsers are installed: `npx playwright install --with-deps`
-- Run locally with same mock env vars to reproduce
+- Reproduce locally: `E2E_BASE_URL=<url> npm run test:e2e` (see the e2e README)
 
-### PostgreSQL connection errors (Backend)
-- CI uses PostgreSQL 15 service container
-- Local tests fall back to SQLite if PostgreSQL unavailable
-- Check `DATABASE_URL` environment variable in CI logs
+### Database connection errors (Backend)
+- CI runs tests on a PostgreSQL 15 service container via `TEST_DATABASE_URL`
+- Locally the suite uses a temp SQLite database (set `TEST_DATABASE_URL` to use Postgres)
+- Tests never read `DATABASE_URL`, so a local `.env` cannot affect them
 
 ## Resources
 

@@ -411,7 +411,7 @@ function StudentApp({ studentData, onLogout, currentUser, onBack = null }) {
         />
       </div>
       <div className="flex flex-col flex-1 min-w-0 min-h-0 bg-transparent">
-        <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-sm flex-shrink-0">
+        <div className="relative z-30 flex items-center justify-between px-4 py-2 border-b border-[var(--color-border-card-subtle)] bg-[var(--bg-frosted)] backdrop-blur-sm flex-shrink-0">
           <div className="flex items-center gap-2">
             <Button
               onClick={() => { setMobileSessionsOpen(true); setPdfViewerOpen(false) }}

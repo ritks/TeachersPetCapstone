@@ -23,7 +23,15 @@ export default defineConfig({
         'dist/',
         '**/*.test.{js,jsx,ts,tsx}',
         '**/*.spec.{js,jsx,ts,tsx}',
-      ]
+      ],
+      // Ratchet floors set just below the current baseline so coverage cannot
+      // regress. Raise these as Phase 2 adds component/lib/context tests.
+      thresholds: {
+        lines: 24,
+        statements: 24,
+        branches: 66,
+        functions: 54,
+      },
     }
   }
 })
