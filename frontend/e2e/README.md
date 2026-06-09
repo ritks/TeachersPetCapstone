@@ -38,40 +38,59 @@ npx playwright test --project=firefox
 
 ## Test Structure
 
-The E2E tests are organized into the following TypeScript files:
+The E2E suite is two detailed, behavior-level tests that perform **real Firebase
+logins** and talk to the **live backend**. They self-skip when credentials are
+absent (so forks/PRs without secrets pass).
 
-### `navigation.spec.ts`
-Tests for basic page navigation and loading:
-- Page loads correctly
-- Navigation elements render
-- No critical JavaScript errors
-- Page load performance (< 5 seconds)
-- Console error handling
+### `student-dashboard.spec.ts`
+Real student login → dashboard. Asserts the dashboard's real rendering invariants:
+- Header + "Your Learning Workspace" render for the signed-in student
+- Every unlocked module exposes an **enabled** "Open Module" button; every locked
+  one a **disabled** "Locked" button
+- Opens an unlocked module and verifies a real chat round-trip (live `POST /chat`
+  returns a non-empty answer)
 
-### `ui.spec.ts`
-Tests for UI rendering and interactions:
-- Component rendering
-- Responsive layout (mobile and desktop)
-- Form input interactions
-- Button clicks
-- Accessibility features
+Skips gracefully if the account has no visible modules (it must be pre-enrolled
+in a class with a module, since students can't create data).
 
-### `api-integration.spec.ts`
-Tests for API interactions and network requests:
-- Network request handling
-- Offline graceful degradation
-- Sensitive data protection
-- Error handling for failed requests
-- Script error resilience
+### `teacher-dashboard.spec.ts`
+Real teacher login → full **create-then-delete** lifecycle (self-cleaning):
+- Creates a uniquely-named class and asserts it persisted to the live backend
+  (not the offline localStorage fallback)
+- Opens the class; adds a real student to the roster, then removes them
+- Creates a group, then deletes it
+- Verifies the Roster / Groups / Modules tabs render
+- Deletes the class, and an `afterEach` hook best-effort deletes it even if an
+  assertion fails mid-test — so no orphan data is left behind
 
-### `workflows.spec.ts`
-Tests for user workflows and cross-browser compatibility:
-- Complete user workflows
-- Page transitions
-- State persistence
-- Performance metrics (Core Web Vitals)
-- LocalStorage functionality
-- Browser feature support
+## Running the tests
+
+These tests need credentials for **dedicated, disposable** test accounts.
+
+**Locally:** create `frontend/.env.local` (gitignored) — no `VITE_` prefix, so the
+values stay in the Node test process and are never bundled into the browser:
+```
+E2E_STUDENT_EMAIL=teststudent@example.com
+E2E_STUDENT_PASSWORD=...
+E2E_TEACHER_EMAIL=testteacher@example.com
+E2E_TEACHER_PASSWORD=...
+```
+Ensure the backend is reachable (the app calls `http://localhost:8000` unless
+`VITE_API_BASE_URL` is set), then run `npm run test:e2e`.
+
+**In CI:** the tests run against the **deployed production app** (no local build
+or dev server). The job needs only these **GitHub Actions secrets**:
+`E2E_BASE_URL` (the deployed app URL, e.g. `https://your-app.vercel.app`),
+`E2E_STUDENT_EMAIL`, `E2E_STUDENT_PASSWORD`, `E2E_TEACHER_EMAIL`,
+`E2E_TEACHER_PASSWORD`. No `VITE_FIREBASE_*` config is needed — the deployed app
+already has it. Setting `E2E_BASE_URL` makes Playwright skip the local dev server
+and target that URL.
+
+> ⚠️ Because CI targets the **deployed** app, it validates whatever is currently
+> live — not a PR's unmerged frontend changes. And it hits the **live backend**:
+> the teacher test creates and deletes real data, and the student chat step
+> consumes LLM quota. The create-then-delete design + `afterEach` cleanup keep
+> the backend tidy.
 
 ## Configuration
 

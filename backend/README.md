@@ -38,11 +38,29 @@ This backend provides API endpoints for answering math questions using Gemini. I
 python backend/main.py
 ```
 
-#### API Endpoint
+The server listens on http://localhost:8000. It uses SQLite by default; set
+`DATABASE_URL` to use Postgres (as in production). Full setup, environment
+variables, and deployment are documented in the root [README](../README.md).
+
+#### API
+
+The backend exposes the tutor chat, sessions, modules/documents, class
+management, and analytics endpoints. See the
+[API Overview](../README.md#api-overview) in the root README for the full list.
+A quick smoke endpoint:
 
 - **POST** `/ask`
   - **Body:** `{ "question": "<your question here>" }`
   - **Response:** `{ "answer": "<model's answer>" }`
+
+### Tests
+
+```sh
+cd backend && pytest tests/ -v
+```
+
+See [tests/README.md](tests/README.md) for the test layout, fixtures, and
+coverage. (Tests use an isolated database and never touch real data.)
 
 ### Testing with the Client
 
