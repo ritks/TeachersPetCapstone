@@ -2,6 +2,17 @@
 
 An AI-powered math tutoring assistant for K–8 students. Teachers manage modules and student access; authenticated students chat with a Gemini-powered tutor scoped to their class material.
 
+## Student View
+<img width="1512" height="864" alt="Screenshot 2026-06-28 at 9 09 30 PM" src="https://github.com/user-attachments/assets/2f3e5822-386a-46e8-8fa8-2c137de4594f" />
+
+## Teacher View
+### Configuring Modules
+<img width="931" height="763" alt="Screenshot 2026-06-28 at 9 16 20 PM" src="https://github.com/user-attachments/assets/71073a8d-af31-47f4-a6df-a54086d55489" />
+
+### Analytics and Insights
+<img width="951" height="856" alt="Screenshot 2026-06-28 at 9 13 40 PM" src="https://github.com/user-attachments/assets/efcccb9b-8f63-448d-9ea3-28516a9f46cb" />
+
+
 ---
 
 ## Tech Stack
